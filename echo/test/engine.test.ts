@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { StateStabilizer, isFist, isOpenPalm, isPinching } from '../src/utils.ts';
+import { StateStabilizer, isFist, isOpenPalm, isPinching, isPointing } from '../src/utils.ts';
 import { LEVELS } from '../src/levels.ts';
 import { 
     getAgentColor, 
@@ -40,7 +40,7 @@ function createMockLandmarks(fingerTipsY: [number, number, number, number], join
     return pts;
 }
 
-describe('ECHO Core Engine & Mechanics Suite (14 Unit Tests)', () => {
+describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
 
     test('1. Gesture: isOpenPalm returns true when 4 fingers extended above joints', () => {
         // Tips are higher (lower y) than joints
@@ -93,10 +93,10 @@ describe('ECHO Core Engine & Mechanics Suite (14 Unit Tests)', () => {
         assert.equal(stabilizer.currentStableValue, 'IDLE');
     });
 
-    test('9. Levels: validates all 4 levels have distinct titles and compliant parameters', () => {
-        assert.equal(LEVELS.length, 4);
+    test('9. Levels: validates all 3 levels have distinct titles and compliant parameters', () => {
+        assert.equal(LEVELS.length, 3);
         const titles = new Set(LEVELS.map(l => l.title));
-        assert.equal(titles.size, 4);
+        assert.equal(titles.size, 3);
 
         LEVELS.forEach(lvl => {
             assert.ok(lvl.man.x >= 0 && lvl.man.x <= 1);
@@ -150,7 +150,7 @@ describe('ECHO Core Engine & Mechanics Suite (14 Unit Tests)', () => {
     });
 
     test('13. Optical Raycasting: Prism reflects laser by 90 deg and charges crystal', () => {
-        gameState.currentLevel = 4;
+        gameState.currentLevel = 1;
         resetLevel();
         assert.ok(prism !== null);
         assert.ok(crystal !== null);
@@ -170,7 +170,7 @@ describe('ECHO Core Engine & Mechanics Suite (14 Unit Tests)', () => {
     });
 
     test('14. Door & Puzzle Win Condition: Door opens only when both lever and crystal are satisfied', () => {
-        gameState.currentLevel = 1;
+        gameState.currentLevel = 3;
         resetLevel();
         assert.ok(lever !== null);
 
@@ -184,5 +184,22 @@ describe('ECHO Core Engine & Mechanics Suite (14 Unit Tests)', () => {
         evaluateRules();
         assert.equal(lever.active, true);
         assert.equal(door.open, true);
+    });
+
+    test('15. Gesture: isPointing returns true when index finger is extended and others are curled', () => {
+        // Index tip (0.2) above its joint (0.4); middle/ring/pinky tips (0.6) below their joints (0.4)
+        const pointingHand = createMockLandmarks([0.2, 0.6, 0.6, 0.6], [0.4, 0.4, 0.4, 0.4]);
+        assert.equal(isPointing(pointingHand), true);
+    });
+
+    test('16. Gesture: isPointing returns false when fingers are open, hand is a fist or landmarks are malformed', () => {
+        const openHand = createMockLandmarks([0.2, 0.2, 0.2, 0.2], [0.4, 0.4, 0.4, 0.4]);
+        assert.equal(isPointing(openHand), false);
+
+        const fistHand = createMockLandmarks([0.6, 0.6, 0.6, 0.6], [0.4, 0.4, 0.4, 0.4]);
+        assert.equal(isPointing(fistHand), false);
+
+        assert.equal(isPointing([]), false);
+        assert.equal(isPointing(null), false);
     });
 });

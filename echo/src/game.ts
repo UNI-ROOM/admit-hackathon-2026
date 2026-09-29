@@ -727,6 +727,11 @@ export function drawTutorial(ctx: CanvasRenderingContext2D, canvasWidth: number,
         const cx = canvasWidth / 2;
         const cy = canvasHeight / 2;
         drawUnmirroredText(ctx, 'Сожми кулак и держи!', cx, cy, '32px sans-serif', '#ef4444');
+    } else if (gameState.tutorialStep === 4) {
+        const cx = canvasWidth / 2;
+        const cy = canvasHeight / 2;
+        drawUnmirroredText(ctx, '☝️ Вытяни указательный палец', cx, cy, '32px sans-serif', '#4ade80');
+        drawUnmirroredText(ctx, 'и наведи на уровень в меню сверху', cx, cy + 40, '20px sans-serif', '#facc15');
     }
 }
 

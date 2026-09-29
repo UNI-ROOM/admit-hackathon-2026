@@ -69,9 +69,9 @@ test('Multi-echo agent styling and naming (ghost_0, ghost_1, live)', () => {
 });
 
 test('Moving laser parameters (minX, maxX, speed) exist on Level 2 and Level 3', () => {
-    // Level 1: no laser
+    // Level 1: static laser
     const lvl1 = LEVELS.find(l => l.id === 1);
-    assert.strictEqual(lvl1?.laser, undefined, 'Level 1 should not have a laser');
+    assert.strictEqual(lvl1?.laser?.minX, undefined, 'Level 1 laser should not move');
 
     // Level 2
     const lvl2 = LEVELS.find(l => l.id === 2);
@@ -263,59 +263,72 @@ test('UI dropdown exists in HTML and is populated in main.ts with Tutorial and L
     assert.match(mainCode, /levelSwitcher\.addEventListener\('change'/, 'main.ts should handle levelSwitcher change event');
 });
 
-test('Level 4 configuration: title, crystal, prism with direction left, door, and laser', () => {
-    const lvl4 = LEVELS.find(l => l.id === 4);
-    assert.ok(lvl4, 'Level 4 must be defined in LEVELS');
-    assert.strictEqual(lvl4.title, 'Уровень 4: Призма и Кристалл', 'Level 4 title should match');
+test('Tutorial step 4 wires the 4th gesture (index finger pointing) into the level menu', () => {
+    const mainPath = path.resolve(process.cwd(), 'src/main.ts');
+    const mainCode = fs.readFileSync(mainPath, 'utf8');
+    assert.match(mainCode, /isPointing/, 'main.ts should import and use isPointing gesture');
+    assert.match(mainCode, /ОБУЧЕНИЕ 4\/4/, 'main.ts should have the 4/4 tutorial step instruction');
+    assert.match(mainCode, /pointingStabilizer/, 'main.ts should debounce the pointing gesture with StateStabilizer');
+    assert.match(mainCode, /LEVELS\.map\(/, 'main.ts should build level HUD buttons from LEVELS');
+
+    const utilsPath = path.resolve(process.cwd(), 'src/utils.ts');
+    const utilsCode = fs.readFileSync(utilsPath, 'utf8');
+    assert.match(utilsCode, /export function isPointing/, 'utils.ts should export isPointing');
+});
+
+test('Level 1 configuration: title, crystal, prism with direction left, door, and laser', () => {
+    const lvl = LEVELS.find(l => l.id === 1);
+    assert.ok(lvl, 'Level 1 must be defined in LEVELS');
+    assert.strictEqual(lvl.title, 'Уровень 1: Призма и Кристалл', 'Level 1 title should match');
 
     // Crystal
-    assert.ok(lvl4.crystal, 'Level 4 must have a crystal config');
-    assert.strictEqual(typeof lvl4.crystal.x, 'number');
-    assert.strictEqual(typeof lvl4.crystal.y, 'number');
-    assert.strictEqual(typeof lvl4.crystal.width, 'number');
-    assert.strictEqual(typeof lvl4.crystal.height, 'number');
+    assert.ok(lvl.crystal, 'Level 1 must have a crystal config');
+    assert.strictEqual(typeof lvl.crystal.x, 'number');
+    assert.strictEqual(typeof lvl.crystal.y, 'number');
+    assert.strictEqual(typeof lvl.crystal.width, 'number');
+    assert.strictEqual(typeof lvl.crystal.height, 'number');
 
     // Prism
-    assert.ok(lvl4.prism, 'Level 4 must have a prism config');
-    assert.strictEqual(typeof lvl4.prism.x, 'number');
-    assert.strictEqual(typeof lvl4.prism.y, 'number');
-    assert.strictEqual(typeof lvl4.prism.width, 'number');
-    assert.strictEqual(typeof lvl4.prism.height, 'number');
-    assert.strictEqual(lvl4.prism.direction, 'left', 'Level 4 prism direction must be left');
+    assert.ok(lvl.prism, 'Level 1 must have a prism config');
+    assert.strictEqual(typeof lvl.prism.x, 'number');
+    assert.strictEqual(typeof lvl.prism.y, 'number');
+    assert.strictEqual(typeof lvl.prism.width, 'number');
+    assert.strictEqual(typeof lvl.prism.height, 'number');
+    assert.strictEqual(lvl.prism.direction, 'left', 'Level 1 prism direction must be left');
 
     // Door
-    assert.ok(lvl4.door, 'Level 4 must have a door config');
-    assert.strictEqual(typeof lvl4.door.x, 'number');
-    assert.strictEqual(typeof lvl4.door.y, 'number');
-    assert.strictEqual(typeof lvl4.door.width, 'number');
-    assert.strictEqual(typeof lvl4.door.height, 'number');
+    assert.ok(lvl.door, 'Level 1 must have a door config');
+    assert.strictEqual(typeof lvl.door.x, 'number');
+    assert.strictEqual(typeof lvl.door.y, 'number');
+    assert.strictEqual(typeof lvl.door.width, 'number');
+    assert.strictEqual(typeof lvl.door.height, 'number');
 
     // Laser
-    assert.ok(lvl4.laser, 'Level 4 must have a laser config');
-    assert.strictEqual(lvl4.laser.active, true, 'Level 4 laser must be active');
-    assert.strictEqual(typeof lvl4.laser.x, 'number');
-    assert.strictEqual(typeof lvl4.laser.y, 'number');
-    assert.strictEqual(typeof lvl4.laser.width, 'number');
-    assert.strictEqual(typeof lvl4.laser.height, 'number');
+    assert.ok(lvl.laser, 'Level 1 must have a laser config');
+    assert.strictEqual(lvl.laser.active, true, 'Level 1 laser must be active');
+    assert.strictEqual(typeof lvl.laser.x, 'number');
+    assert.strictEqual(typeof lvl.laser.y, 'number');
+    assert.strictEqual(typeof lvl.laser.width, 'number');
+    assert.strictEqual(typeof lvl.laser.height, 'number');
 
     // Runtime state checks
-    gameState.currentLevel = 4;
+    gameState.currentLevel = 1;
     resetLevel();
-    assert.ok(crystal, 'Runtime crystal should be initialized on Level 4');
-    assert.strictEqual(crystal.x, lvl4.crystal.x);
-    assert.strictEqual(crystal.y, lvl4.crystal.y);
+    assert.ok(crystal, 'Runtime crystal should be initialized on Level 1');
+    assert.strictEqual(crystal.x, lvl.crystal.x);
+    assert.strictEqual(crystal.y, lvl.crystal.y);
     assert.strictEqual(crystal.charge, 0);
     assert.strictEqual(crystal.charged, false);
 
-    assert.ok(prism, 'Runtime prism should be initialized on Level 4');
-    assert.strictEqual(prism.x, lvl4.prism.x);
-    assert.strictEqual(prism.y, lvl4.prism.y);
+    assert.ok(prism, 'Runtime prism should be initialized on Level 1');
+    assert.strictEqual(prism.x, lvl.prism.x);
+    assert.strictEqual(prism.y, lvl.prism.y);
     assert.strictEqual(prism.direction, 'left');
 
-    assert.ok(laser, 'Runtime laser should be initialized on Level 4');
+    assert.ok(laser, 'Runtime laser should be initialized on Level 1');
     assert.strictEqual(laser.active, true);
 
-    assert.ok(door, 'Runtime door should be initialized on Level 4');
+    assert.ok(door, 'Runtime door should be initialized on Level 1');
     assert.strictEqual(door.open, false);
 });
 

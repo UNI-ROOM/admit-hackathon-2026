@@ -87,3 +87,28 @@ export interface GameState {
     wonTimeoutSet?: boolean;
     baseInstruction: string;
 }
+
+export interface LevelConfig {
+    id: number;
+    title: string;
+    man: { x: number, y: number };
+    lever?: { x: number, y: number };
+    door: { x: number, y: number, width: number, height: number };
+    laser?: { 
+        x: number; 
+        y: number; 
+        width: number; 
+        height: number; 
+        active: boolean;
+        minX?: number;
+        maxX?: number;
+        speed?: number;
+    };
+    plate?: { x: number, y: number, width: number, height: number };
+    crystal?: { x: number, y: number, width: number, height: number };
+    prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
+    maxEchoes?: number;
+    hintIdle?: string;
+    hintRecording?: string | string[];
+    hintPlaying?: string;
+}

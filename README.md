@@ -15,6 +15,8 @@ docker compose up --build
 Игра мгновенно доступна по адресу:
 👉 **[http://localhost:5173](http://localhost:5173)**
 
+> 🔒 **Сетевая безопасность (Zero-Trust Localhost Binding):** в соответствии с правилами безопасной разработки порт контейнера привязан строго к `127.0.0.1:${PORT:-5173}:5173`. Сервис не светится наружу в открытую сеть (`0.0.0.0`), оставаясь полностью изолированным на локальной машине.
+
 Остановить:
 ```bash
 docker compose down
@@ -33,7 +35,7 @@ npm run dev
 
 ---
 
-### 🧪 Запуск Unit-тестов движка (14/14 passing)
+### 🧪 Запуск Unit-тестов движка (31/31 passing, из них 16 — движковых)
 Встроенный TypeScript test runner без сторонних тяжелых фреймворков:
 ```bash
 cd echo
@@ -59,10 +61,11 @@ flowchart LR
 ```
 
 ### 🧭 Кампания и уровни:
-1. **🎓 Интерактивный туториал (3 шага)**:
+1. **🎓 Интерактивный туториал (4 шага)**:
    - Шаг 1: Калибровка ладони — демонстрация открытой кисти 🖐️.
    - Шаг 2: Калибровка щипка — захват куба и перемещение в зону телепорта 🤏.
    - Шаг 3: Калибровка сброса кулаком ✊ (удержание 5 секунд для мгновенного перезапуска).
+   - Шаг 4: **Новый 4-й жест — указательный палец 👆** — наведение на кнопки меню уровней сверху для перехода между уровнями (подтверждение: удержание 1 секунды или щипок).
 2. **Уровень 1: «Призма и Кристалл» (Оптика & Преломление)**:
    - Вертикальный лазер отражается призмой под углом 90°.
    - Игрок направляет луч на фотонный кристалл до полной зарядки (100%), пока клон помогает удерживать компоненты.
@@ -76,7 +79,12 @@ flowchart LR
 
 ## 🛠️ Архитектура и Технические Преимущества (Engineering Excellence)
 
-Подробный разбор архитектурных решений, математики синтеза и оптики читайте в [ARCHITECTURE.md](file:///home/kebi/proga/Kebi/admit-hackathon-2026/ARCHITECTURE.md).
+> [!IMPORTANT]
+> 📖 **Для глубокого технического аудита:** ознакомьтесь с [ARCHITECTURE.md](ARCHITECTURE.md) — там детально расписана архитектура пайплайна, математика процедурного синтеза звука, формулы лучевой оптики и алгоритмы распознавания жестов.
+
+> 📂 **Структура репозитория и `index.html` в корне:**
+> - `index.html` в корне проекта — это **исторический стартовый прототип Дня 1** (базовый свайп-трекер, полученный на старте хакатона).
+> - **Вся полнофункциональная игра** на собственном движке (Canvas 2D + Web Audio API + Multi-Echo + Docker) живёт в директории [`echo/`](echo/).
 
 ### 1. ⚡ Собственный легковесный движок (Zero Engine Bloat)
 - **0 внешних графических фреймворков**: Никаких 40-мегабайтных Unity WebGL, Phaser или Three.js.
@@ -108,12 +116,15 @@ flowchart LR
 
 В проекте строго реализованы все требования регламента хакатона:
 
-### 🖐️ 3 Обязательных жеста
+### 🖐️ 4 жеста (3 обязательных + наш новый 4-й)
 | Жест | Визуализация | Роль в игре | Особенности детекции |
 | :--- | :---: | :--- | :--- |
 | **Открытая ладонь** | 🖐️ | Старт уровня / Запуск записи петли | Все 4 пальца выпрямлены выше суставов PIP, запястье в кадре |
-| **Щипок (Pinch)** | 🤏 | Захват и перенос объектов (человечек, щит, призма) | Евклидово расстояние между кончиком большого и указательного пальцев `< 0.08` |
+| **Щипок (Pinch)** | 🤏 | Захват и перенос объектов (человечек, щит, призма); быстрое подтверждение выбора уровня | Евклидово расстояние между кончиком большого и указательного пальцев `< 0.08` |
 | **Кулак (Fist)** | ✊ | Аварийный сброс уровня (Hold 5s) | Все кончики пальцев сжаты ниже суставов; круговой таймер удержания |
+| **Указательный палец (новый 4-й жест)** | 👆 | Шаг 4 обучения: курсор меню уровней активируется только этим жестом; подтверждение — удержание 1 сек или щипок | Кончик указательного пальца выше сустава PIP, а средний, безымянный и мизинец согнуты ниже своих суставов; жест читается **по вертикали** — показывай вверх; фильтруется `StateStabilizer(5)` |
+
+> 💡 В обычном режиме ожидания (`IDLE`) курсор меню уровней доступен с любой позой руки — жест «указательный палец» **обязателен на шаге 4 обучения**, где им и проверяется его освоение.
 
 ### 🧠 Наш Твист: Интеллектуальный анатомический дебаггер ошибок
 В отличие от тривиальных игр, где при потере руки игра просто молчит, ECHO включает **активную систему обратной связи**:
@@ -128,32 +139,34 @@ flowchart LR
 
 ## 🧪 Тестирование и Надежность
 
-- **14/14 Unit-тестов**: Покрывают распознавание жестов, подавление дребезга (`StateStabilizer`), арбитраж мульти-агентов, оптику преломления и логику условий победы.
+- **31/31 Unit-тестов** (16 — движковых): Покрывают распознавание жестов (включая новый 4-й жест «указательный палец»), подавление дребезга (`StateStabilizer`), арбитраж мульти-агентов, оптику преломления и логику условий победы.
 - **Строгий TypeScript**: Никаких `any`-кастов в игровой логике, строгая типизация состояний (`mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON'`).
 - **StateStabilizer**: Алгоритм фильтрации шума камеры, требующий `N` устойчивых кадров для исключения ложных переключений состояний.
 
 ```bash
-# Запуск тестов:
+# Запуск тестов (показан вывод движкового суита, всего 31 тест):
 $ cd echo && npx --yes tsx --test
 
-✔ 1. Gesture: isOpenPalm returns true when 4 fingers extended above joints
-✔ 2. Gesture: isOpenPalm returns false when any finger is curled
-✔ 3. Gesture: isFist returns true when all 4 fingertips are lower than joints
-✔ 4. Gesture: isFist returns false when fingers are open
-✔ 5. Gesture: isPinching detects active pinch within 0.08 normalized distance
-✔ 6. Gesture: isPinching rejects when thumb and index finger are far apart
-✔ 7. StateStabilizer: filters jitter and only transitions after required frame threshold
-✔ 8. StateStabilizer: resets counter if intermittent jitter disrupts candidate sequence
-✔ 9. Levels: validates all 4 levels have distinct titles and compliant parameters
-✔ 10. Multi-Agent Identity: maps ghost and player IDs to distinct thematic colors & names
-✔ 11. Particle Engine: spawns sparks within bounded capacity without memory leaks
-✔ 12. Laser Optics: Shield (Plate) deflects and truncates laser beam height
-✔ 13. Optical Raycasting: Prism reflects laser by 90 deg and charges crystal
-✔ 14. Door & Puzzle Win Condition: Door opens only when both lever and crystal are satisfied
+  ✔ 1. Gesture: isOpenPalm returns true when 4 fingers extended above joints
+  ✔ 2. Gesture: isOpenPalm returns false when any finger is curled
+  ✔ 3. Gesture: isFist returns true when all 4 fingertips are lower than joints
+  ✔ 4. Gesture: isFist returns false when fingers are open
+  ✔ 5. Gesture: isPinching detects active pinch within 0.08 normalized distance
+  ✔ 6. Gesture: isPinching rejects when thumb and index finger are far apart
+  ✔ 7. StateStabilizer: filters jitter and only transitions after required frame threshold
+  ✔ 8. StateStabilizer: resets counter if intermittent jitter disrupts candidate sequence
+  ✔ 9. Levels: validates all 3 levels have distinct titles and compliant parameters
+  ✔ 10. Multi-Agent Identity: maps ghost and player IDs to distinct thematic colors & names
+  ✔ 11. Particle Engine: spawns sparks within bounded capacity without memory leaks
+  ✔ 12. Laser Optics: Shield (Plate) deflects and truncates laser beam height
+  ✔ 13. Optical Raycasting: Prism reflects laser by 90 deg and charges crystal
+  ✔ 14. Door & Puzzle Win Condition: Door opens only when both lever and crystal are satisfied
+  ✔ 15. Gesture: isPointing returns true when index finger is extended and others are curled
+  ✔ 16. Gesture: isPointing returns false when fingers are open, hand is a fist or landmarks are malformed
 
-ℹ tests 14
+ℹ tests 31
 ℹ suites 1
-ℹ pass 14
+ℹ pass 31
 ℹ fail 0
 ```
 

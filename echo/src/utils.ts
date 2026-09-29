@@ -49,6 +49,18 @@ export function isPinching(landmarks: any[]) {
     return Math.sqrt(Math.pow(thumb.x - index.x, 2) + Math.pow(thumb.y - index.y, 2)) < 0.08;
 }
 
+// 4th gesture: index finger pointing ( указательный палец )
+// Index finger extended above its PIP joint, middle/ring/pinky curled below theirs.
+export function isPointing(landmarks: any[]) {
+    if (!landmarks || landmarks.length < 21) return false;
+    const indexExtended = landmarks[8].y < landmarks[6].y;
+    const curled: [number, number][] = [[12, 10], [16, 14], [20, 18]];
+    for (const [tip, joint] of curled) {
+        if (landmarks[tip].y <= landmarks[joint].y) return false;
+    }
+    return indexExtended;
+}
+
 export function drawUnmirroredText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, font: string, color: string) {
     ctx.save();
     ctx.translate(x, y);

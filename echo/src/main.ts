@@ -1,5 +1,5 @@
 import './style.css';
-import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
+import { StateStabilizer, isFist, isOpenPalm, isPinching, isPointing, drawUnmirroredText } from './utils';
 import { 
     gameState, man, lever, tutorialBox, tutorialTarget, 
     resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
@@ -23,10 +23,8 @@ const levelSwitcher = document.getElementById('level-switcher') as HTMLSelectEle
 let wonTimeout: any = null;
 
 function getIdleInstruction(level: number): string {
-    if (level === 4) {
-        return "Поставь <b class='text-cyan-400'>ПРИЗМУ</b> под лазер, чтобы направить луч в кристалл! (10 сек)";
-    }
-    return "Уровень загружен! Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!";
+    const config = LEVELS[level - 1];
+    return config?.hintIdle || "Уровень загружен! Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!";
 }
 
 if (levelSwitcher) {
@@ -64,16 +62,16 @@ if (levelSwitcher) {
             gameState.mode = 'TUTORIAL';
             gameState.tutorialStep = 1;
             resetLevel();
-            gameState.baseInstruction = "ОБУЧЕНИЕ 1/3: Покажи полностью открытую ладонь!";
+            gameState.baseInstruction = "ОБУЧЕНИЕ 1/4: Покажи полностью открытую ладонь!";
             instruction.innerHTML = gameState.baseInstruction;
-            modeIndicator.innerText = "ОБУЧЕНИЕ 1/3";
+            modeIndicator.innerText = "ОБУЧЕНИЕ 1/4";
             modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400";
             const titleEl = document.getElementById('level-title');
             if (titleEl) titleEl.innerText = "Обучение";
         } else {
             gameState.currentLevel = levelIndex;
             gameState.mode = 'IDLE';
-            gameState.tutorialStep = 4; // safely clear tutorial step
+            gameState.tutorialStep = 0; // not in tutorial anymore (0 = cleared)
             
             resetLevel();
             
@@ -100,6 +98,108 @@ resizeCanvas();
 
 const fistStabilizer = new StateStabilizer(150, false);
 const hintStabilizer = new StateStabilizer(15, "");
+// 4th gesture (index finger pointing) is debounced so camera flicker cannot reset the 1s dwell timer
+const pointingStabilizer = new StateStabilizer(5, false);
+
+let hoveredButtonIndex: number | null = null;
+let hoverStartTime: number = 0;
+let lastHudRenderTime: number = 0;
+
+function drawAndHandleLevelHUD(ctx: CanvasRenderingContext2D, w: number, h: number, liveHand: any, now: number) {
+    // The HUD is only drawn in IDLE and tutorial steps 1/4: if it was not rendered for a
+    // while (mode/step switch), drop any stale hover so the dwell timer starts from zero.
+    if (lastHudRenderTime > 0 && now - lastHudRenderTime > 200) {
+        hoveredButtonIndex = null;
+    }
+    lastHudRenderTime = now;
+
+    const buttons = [
+        { label: 'ОБУЧЕНИЕ', value: 0 },
+        ...LEVELS.map((_lvl, index) => ({ label: `УРОВЕНЬ ${index + 1}`, value: index + 1 })),
+    ];
+    
+    const btnW = 140;
+    const btnH = 50;
+    const gap = 20;
+    const totalW = buttons.length * btnW + (buttons.length - 1) * gap;
+    const startX = (w - totalW) / 2;
+    const btnY = 20;
+    
+    const isTutorialStep4 = gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 4;
+    const isPointingNow = liveHand ? pointingStabilizer.update(isPointing(liveHand)) : pointingStabilizer.update(false);
+    // In tutorial step 4 the level menu only reacts to the 4th gesture (index finger pointing);
+    // in IDLE the cursor stays available with any hand pose, as before.
+    const cursorActive = !isTutorialStep4 || isPointingNow;
+
+    let cursorX = -1;
+    let cursorY = -1;
+    let isPinch = false;
+    
+    if (liveHand) {
+        cursorX = liveHand[8].x * w;
+        cursorY = liveHand[8].y * h;
+        isPinch = isPinching(liveHand);
+        
+        ctx.beginPath();
+        ctx.arc(cursorX, cursorY, cursorActive ? 12 : 10, 0, 2 * Math.PI);
+        ctx.fillStyle = cursorActive ? (isPointingNow ? 'rgba(74, 222, 128, 0.9)' : 'rgba(6, 182, 212, 0.8)') : 'rgba(120, 120, 120, 0.5)';
+        ctx.fill();
+        ctx.strokeStyle = cursorActive ? '#fff' : '#666';
+        ctx.stroke();
+        
+        if (isTutorialStep4) {
+            const label = isPointingNow ? '☝️ КУРСОР АКТИВЕН' : 'Покажи УКАЗАТЕЛЬНЫЙ ПАЛЕЦ 👆';
+            drawUnmirroredText(ctx, label, cursorX, cursorY + 40, 'bold 16px sans-serif', isPointingNow ? '#4ade80' : '#facc15');
+        }
+    }
+    
+    let currentHover: number | null = null;
+    
+    buttons.forEach((btn, i) => {
+        const btnX = startX + i * (btnW + gap);
+        const isHovered = cursorActive && cursorX >= btnX && cursorX <= btnX + btnW && cursorY >= btnY && cursorY <= btnY + btnH;
+        
+        if (isHovered) currentHover = i;
+        
+        ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(btnX, btnY, btnW, btnH);
+        
+        ctx.strokeStyle = isHovered ? '#06b6d4' : '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(btnX, btnY, btnW, btnH);
+        
+        const textColor = isHovered ? '#000' : '#fff';
+        drawUnmirroredText(ctx, btn.label, btnX + btnW / 2, btnY + 32, 'bold 16px sans-serif', textColor);
+    });
+
+    if (currentHover !== null) {
+        if (hoveredButtonIndex !== currentHover) {
+            hoveredButtonIndex = currentHover;
+            hoverStartTime = now;
+        } else {
+            const dwellTime = now - hoverStartTime;
+            if (dwellTime >= 1000 || isPinch) {
+                const selectedBtn = buttons[currentHover];
+                if (levelSwitcher) {
+                    levelSwitcher.value = selectedBtn.value.toString();
+                    levelSwitcher.dispatchEvent(new Event('change'));
+                }
+                try { playSfx('win'); } catch(e) {}
+                hoveredButtonIndex = null;
+            } else {
+                const progress = dwellTime / 1000;
+                const btnX = startX + currentHover * (btnW + gap);
+                ctx.beginPath();
+                ctx.arc(btnX + btnW / 2, btnY + btnH + 20, 15, -Math.PI/2, -Math.PI/2 + 2 * Math.PI * progress);
+                ctx.strokeStyle = '#06b6d4';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+        }
+    } else {
+        hoveredButtonIndex = null;
+    }
+}
 
 function onResults(results: any) {
     canvasCtx.save();
@@ -157,11 +257,10 @@ function onResults(results: any) {
             gameState.echoIndex = 0;
 
             if (gameState.mode === 'TUTORIAL') {
-                gameState.mode = 'IDLE';
+                gameState.tutorialStep = 4;
                 resetLevel();
-                modeIndicator.innerText = "ОЖИДАНИЕ...";
-                modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
-                gameState.baseInstruction = "Обучение завершено! Покажи открытую ладонь, чтобы начать!";
+                gameState.baseInstruction = "ОБУЧЕНИЕ 4/4: Вытяни УКАЗАТЕЛЬНЫЙ ПАЛЕЦ 👆 и наведи на «УРОВЕНЬ 1» сверху, удерживай 1 сек!";
+                modeIndicator.innerText = "ОБУЧЕНИЕ 4/4";
             } else {
                 gameState.mode = 'IDLE';
                 resetLevel();
@@ -195,8 +294,8 @@ function onResults(results: any) {
         if (gameState.tutorialStep === 1) {
             if (liveHand && isOpenPalm(liveHand)) {
                 gameState.tutorialStep = 2;
-                gameState.baseInstruction = "ОБУЧЕНИЕ 2/3: Щипком перетащи БЛОК в ЦЕЛЬ!";
-                modeIndicator.innerText = "ОБУЧЕНИЕ 2/3";
+                gameState.baseInstruction = "ОБУЧЕНИЕ 2/4: Щипком перетащи БЛОК в ЦЕЛЬ!";
+                modeIndicator.innerText = "ОБУЧЕНИЕ 2/4";
             }
         } else if (gameState.tutorialStep === 2) {
             handleTutorialDrag(canvasCtx, canvasElement.width, canvasElement.height, liveHand);
@@ -204,8 +303,8 @@ function onResults(results: any) {
                 const dist = Math.sqrt(Math.pow(tutorialBox.x - tutorialTarget.x, 2) + Math.pow(tutorialBox.y - tutorialTarget.y, 2));
                 if (dist < tutorialTarget.radius) {
                     gameState.tutorialStep = 3;
-                    gameState.baseInstruction = "ОБУЧЕНИЕ 3/3: Сожми КУЛАК и держи его (сброс петли)!";
-                    modeIndicator.innerText = "ОБУЧЕНИЕ 3/3";
+                    gameState.baseInstruction = "ОБУЧЕНИЕ 3/4: Сожми КУЛАК и держи его (сброс петли)!";
+                    modeIndicator.innerText = "ОБУЧЕНИЕ 3/4";
                 }
             }
         }
@@ -224,14 +323,11 @@ function onResults(results: any) {
                 modeIndicator.innerText = `🔴 ЗАПИСЬ (10с)`;
             }
             modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
-            if (gameState.currentLevel === 1) {
-                gameState.baseInstruction = `Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)`;
-            } else if (gameState.currentLevel === 2) {
-                gameState.baseInstruction = `Держи <b class='text-red-400'>ЩИТ</b> под лазером и двигай за ним! (10 сек)`;
-            } else if (gameState.currentLevel === 3) {
-                gameState.baseInstruction = `ЭХО 1/2: Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)`;
-            } else if (gameState.currentLevel === 4) {
-                gameState.baseInstruction = `Клон направит луч в кристалл. А ТЫ хватай человечка и беги к двери!`;
+            const config = LEVELS[gameState.currentLevel - 1];
+            if (Array.isArray(config?.hintRecording)) {
+                gameState.baseInstruction = config.hintRecording[0] || "Продолжай запись!";
+            } else {
+                gameState.baseInstruction = (config?.hintRecording as string) || "Продолжай запись!";
             }
             instruction.innerHTML = gameState.baseInstruction;
         }
@@ -253,8 +349,9 @@ function onResults(results: any) {
                 resetLevel();
                 
                 modeIndicator.innerText = `🔴 ЗАПИСЬ ${gameState.echoIndex + 1}/${gameState.maxEchoes} (10с)`;
-                if (gameState.currentLevel === 3) {
-                    gameState.baseInstruction = `ЭХО 2/2: Клон 1 держит рычаг. А ты держи <b class='text-blue-400'>ЩИТ</b> и двигай за лазером! (10 сек)`;
+                const config = LEVELS[gameState.currentLevel - 1];
+                if (Array.isArray(config?.hintRecording) && config.hintRecording.length > gameState.echoIndex) {
+                    gameState.baseInstruction = config.hintRecording[gameState.echoIndex];
                 } else {
                     gameState.baseInstruction = `ЭХО ${gameState.echoIndex + 1}/${gameState.maxEchoes}: Продолжай запись! (10 сек)`;
                 }
@@ -267,15 +364,8 @@ function onResults(results: any) {
                 
                 modeIndicator.innerText = "👻 ПЕТЛЯ";
                 modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
-                if (gameState.currentLevel === 1) {
-                    gameState.baseInstruction = `Клон держит рычаг. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!`;
-                } else if (gameState.currentLevel === 2) {
-                    gameState.baseInstruction = `Клон держит щит. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!`;
-                } else if (gameState.currentLevel === 3) {
-                    gameState.baseInstruction = `Клоны держат рычаг и щит! А ТЫ хватай человечка и спасай его к <b class='text-green-400'>ДВЕРИ</b>!`;
-                } else if (gameState.currentLevel === 4) {
-                    gameState.baseInstruction = `Клон заряжает кристалл! А ТЫ веди человечка в открытую <b class='text-green-400'>ДВЕРЬ</b>!`;
-                }
+                const config = LEVELS[gameState.currentLevel - 1];
+                gameState.baseInstruction = config?.hintPlaying || "Хватай человечка и тащи к ДВЕРИ!";
                 instruction.innerHTML = gameState.baseInstruction;
             }
         } else {
@@ -415,6 +505,11 @@ function onResults(results: any) {
         evaluateRules();
         drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
     }
+
+    if (gameState.mode === 'IDLE' || (gameState.mode === 'TUTORIAL' && (gameState.tutorialStep === 1 || gameState.tutorialStep === 4))) {
+        drawAndHandleLevelHUD(canvasCtx, canvasElement.width, canvasElement.height, liveHand, now);
+    }
+    
     canvasCtx.restore();
 }
 

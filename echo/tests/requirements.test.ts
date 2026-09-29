@@ -23,21 +23,22 @@ test('Free-movement mechanics are intact (x, y float coordinates)', () => {
         fillText: () => {}
     };
     
-    // Create landmarks that simulate a pinch near the man (0.5, 0.8)
+    // Create landmarks that simulate a pinch near the man
     const handLandmarks = [
         {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, // 0-3
-        {x: 0.51, y: 0.81}, // 4 (thumb tip)
+        {x: man.x + 0.01, y: man.y + 0.01}, // 4 (thumb tip)
         {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, // 5-7
-        {x: 0.51, y: 0.81}, // 8 (index tip)
+        {x: man.x + 0.01, y: man.y + 0.01}, // 8 (index tip)
     ];
+    
+    const initialManX = man.x;
+    const initialManY = man.y;
     
     handleDragAndDrop(ctxMock as any, 1000, 1000, handLandmarks, 'live');
     
     assert.strictEqual(man.grabbedBy, 'live', 'Man should be grabbed');
-    // Movement logic in game.ts is: man.x += (px - man.x) * 0.15;
-    // px = 0.51, man.x = 0.5 => 0.5 + 0.01 * 0.15 = 0.5015
-    assert.ok(man.x > 0.5 && man.x <= 0.51, 'Man x should be updated as a float');
-    assert.ok(man.y > 0.8 && man.y <= 0.81, 'Man y should be updated as a float');
+    assert.ok(man.x > initialManX && man.x <= initialManX + 0.01, 'Man x should be updated as a float');
+    assert.ok(man.y > initialManY && man.y <= initialManY + 0.01, 'Man y should be updated as a float');
 });
 
 test('Gravity works (entities fall to floor_y = 0.8)', () => {
