@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECHO: Временная петля (God Mode)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        body { margin: 0; background-color: #050510; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #game-container { position: relative; width: 100vw; height: 100vh; background: radial-gradient(circle at center, #1a1a2e 0%, #050510 100%); }
+        #webcam { display: none; }
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 10; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem; box-sizing: border-box; }
+        .status-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 12px; backdrop-filter: blur(5px); text-align: center; transition: all 0.3s ease; }
+        .recording { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+        .playing { border-color: #06b6d4; box-shadow: 0 0 20px rgba(6, 182, 212, 0.5); }
+
+        /* Tutorial Animation */
+        @keyframes brief-scoop-path {
+            0%, 8% { transform: translate(118px, 108px) scale(1); opacity: 1; }
+            18% { transform: translate(108px, 92px) scale(1.05); }
+            28%, 36% { transform: translate(102px, 86px) scale(0.92); }
+            58% { transform: translate(232px, 126px) scale(1); }
+            68%, 78% { transform: translate(248px, 142px) scale(0.86); opacity: 1; }
+            88%, 100% { transform: translate(118px, 108px) scale(1); opacity: 0; }
+        }
+        @keyframes brief-thumb-pinch {
+            0%, 12% { transform: rotate(-32deg) translate(0, 0); }
+            22%, 36% { transform: rotate(-14deg) translate(8px, -10px); }
+            50%, 100% { transform: rotate(-32deg) translate(0, 0); }
+        }
+        @keyframes brief-index-pinch {
+            0%, 12% { transform: translate(0, 0); }
+            22%, 36% { transform: translate(-6px, 12px); }
+            50%, 100% { transform: translate(0, 0); }
+        }
+        @keyframes brief-hand-carry {
+            0%, 28% { transform: translate(0, 0); opacity: 1; }
+            58% { transform: translate(108px, 6px); opacity: 1; }
+            72%, 100% { transform: translate(108px, 6px); opacity: 0.3; }
+        }
+        @keyframes brief-ring-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.72; }
+        }
+        @keyframes brief-spark-pop {
+            0%, 18% { opacity: 0; transform: scale(0.4); }
+            24% { opacity: 1; transform: scale(1.2); }
+            34% { opacity: 0.85; transform: scale(1); }
+            42%, 100% { opacity: 0; transform: scale(0.5); }
+        }
+
+        .brief-scoop { transform-box: fill-box; transform-origin: center; animation: brief-scoop-path 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+        .brief-hand { transform-box: fill-box; transform-origin: center; animation: brief-hand-carry 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+        .brief-thumb { transform-box: fill-box; transform-origin: center; animation: brief-thumb-pinch 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+        .brief-index { transform-box: fill-box; transform-origin: center; animation: brief-index-pinch 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+        .brief-ring { transform-box: fill-box; transform-origin: center; animation: brief-ring-pulse 1.8s ease-in-out infinite; }
+        .brief-spark { transform-box: fill-box; transform-origin: center; animation: brief-spark-pop 4.4s ease-out infinite; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .brief-scoop, .brief-hand, .brief-thumb, .brief-index, .brief-ring, .brief-spark { animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="game-canvas"></canvas>
+        
+
+
+        <div id="ui-layer">
+            <div class="flex justify-between w-full">
+                <div class="status-box">
+                    <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 tracking-wider">ECHO: GOD MODE</h1>
+                    <p class="text-sm text-gray-400 mt-1 uppercase tracking-widest">Уровень 2: Рычаг и Дверь</p>
+                </div>
+                <div id="mode-indicator" class="status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400">ОБУЧЕНИЕ 1/3</div>
+            </div>
+            <div class="text-center mb-8">
+                <p id="instruction" class="text-2xl text-gray-100 bg-black/60 px-8 py-4 rounded-2xl inline-block backdrop-blur-md border border-white/20 shadow-2xl">
+                    Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('game-canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const modeIndicator = document.getElementById('mode-indicator');
+        const instruction = document.getElementById('instruction');
+
+        function resizeCanvas() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class StateStabilizer {
+            constructor(framesRequired, initialValue = null) {
+                this.framesRequired = framesRequired;
+                this.currentStableValue = initialValue;
+                this.candidateValue = initialValue;
+                this.consecutiveCount = 0;
+            }
+            update(newValue) {
+                if (newValue === this.candidateValue) {
+                    this.consecutiveCount++;
+                    if (this.consecutiveCount >= this.framesRequired) {
+                        this.currentStableValue = this.candidateValue;
+                    }
+                } else {
+                    this.candidateValue = newValue;
+                    this.consecutiveCount = 1;
+                }
+                return this.currentStableValue;
+            }
+        }
+
+        const fistStabilizer = new StateStabilizer(150, false);
+        const hintStabilizer = new StateStabilizer(15, "");
+
+        const GameState = {
+            mode: 'TUTORIAL', 
+            tutorialStep: 1,
+            frames: [], 
+            currentFrame: 0,
+            recordStartTime: 0,
+            RECORD_DURATION: 10000,
+            baseInstruction: "ОБУЧЕНИЕ 1/3: Покажи полностью открытую ладонь!"
+        };
+
+        let man = { x: 0.5, y: 0.8, grabbedBy: null, color: '#facc15' }; 
+        let lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+        let door = { x: 0.2, y: 0.2, width: 0.15, height: 0.15, open: false };
+        
+        let tutorialBox = { x: 0.3, y: 0.5, grabbedBy: null };
+        let tutorialTarget = { x: 0.7, y: 0.5, radius: 0.1 };
+
+        function isFist(landmarks) {
+            const tips = [8, 12, 16, 20];
+            const joints = [6, 10, 14, 18];
+            for (let i = 0; i < 4; i++) {
+                if (landmarks[tips[i]].y <= landmarks[joints[i]].y) return false;
+            }
+            return true;
+        }
+
+        function isOpenPalm(landmarks) {
+            const tips = [8, 12, 16, 20];
+            const joints = [6, 10, 14, 18];
+            let straight = 0;
+            for(let i=0; i<4; i++) {
+                if (landmarks[tips[i]].y < landmarks[joints[i]].y) straight++;
+            }
+            return straight === 4 && landmarks[0].y < 0.8;
+        }
+
+        function isPinching(landmarks) {
+            const thumb = landmarks[4];
+            const index = landmarks[8];
+            return Math.sqrt(Math.pow(thumb.x - index.x, 2) + Math.pow(thumb.y - index.y, 2)) < 0.08;
+        }
+
+        // Функция для рисования правильного (не отзеркаленного) текста
+        function drawUnmirroredText(ctx, text, x, y, font, color) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(-1, 1);
+            ctx.font = font;
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+        }
+
+        function drawMan(ctx, m) {
+            const pxX = m.x * canvasElement.width;
+            const pxY = m.y * canvasElement.height;
+            const size = 30;
+
+            ctx.beginPath();
+            ctx.arc(pxX, pxY - size, size/2, 0, Math.PI * 2);
+            ctx.fillStyle = m.color;
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(pxX, pxY - size/2); 
+            ctx.lineTo(pxX, pxY + size);
+            ctx.moveTo(pxX - size/1.5, pxY); 
+            ctx.lineTo(pxX + size/1.5, pxY);
+            ctx.moveTo(pxX, pxY + size); 
+            ctx.lineTo(pxX - size/1.5, pxY + size*1.5);
+            ctx.moveTo(pxX, pxY + size);
+            ctx.lineTo(pxX + size/1.5, pxY + size*1.5);
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = m.color;
+            ctx.stroke();
+
+            if (m.grabbedBy) {
+                ctx.beginPath();
+                ctx.arc(pxX, pxY, size*2.5, 0, Math.PI * 2);
+                ctx.fillStyle = m.grabbedBy === 'ghost' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(249, 115, 22, 0.3)';
+                ctx.fill();
+            }
+        }
+
+        function drawWorld() {
+            // Рисуем рычаг
+            const lvx = lever.x * canvasElement.width;
+            const lvyTop = 0.3 * canvasElement.height;
+            const lvyBot = 0.5 * canvasElement.height;
+            const handleY = lever.handleY * canvasElement.height;
+            
+            // Основание (паз для рычага)
+            canvasCtx.fillStyle = '#333';
+            canvasCtx.fillRect(lvx - 10, lvyTop, 20, lvyBot - lvyTop);
+            canvasCtx.strokeStyle = lever.active ? '#10b981' : '#ef4444';
+            canvasCtx.lineWidth = 4;
+            canvasCtx.strokeRect(lvx - 10, lvyTop, 20, lvyBot - lvyTop);
+            
+            // Ручка
+            canvasCtx.beginPath();
+            canvasCtx.arc(lvx, handleY, 20, 0, Math.PI * 2);
+            canvasCtx.fillStyle = lever.active ? '#10b981' : '#ef4444';
+            canvasCtx.fill();
+
+            if (lever.grabbedBy) {
+                canvasCtx.beginPath();
+                canvasCtx.arc(lvx, handleY, 40, 0, Math.PI * 2);
+                canvasCtx.fillStyle = lever.grabbedBy === 'ghost' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(249, 115, 22, 0.3)';
+                canvasCtx.fill();
+            }
+
+            drawUnmirroredText(canvasCtx, 'РЫЧАГ', lvx, lvyTop - 20, '24px sans-serif', 'white');
+
+            // Рисуем дверь
+            const doorW = door.width * canvasElement.width;
+            const doorH = door.height * canvasElement.height;
+            const doorX = door.x * canvasElement.width - doorW/2;
+            const doorY = door.y * canvasElement.height - doorH/2;
+            
+            canvasCtx.fillStyle = door.open ? '#4ade80' : '#475569';
+            canvasCtx.fillRect(doorX, doorY, doorW, doorH);
+            canvasCtx.strokeStyle = 'white';
+            canvasCtx.lineWidth = 4;
+            canvasCtx.strokeRect(doorX, doorY, doorW, doorH);
+            
+            drawUnmirroredText(canvasCtx, door.open ? 'ВЫХОД ОТКРЫТ' : 'ЗАКРЫТО', doorX + doorW/2, doorY - 10, '24px sans-serif', 'white');
+
+            // Человечек
+            drawMan(canvasCtx, man);
+        }
+
+        function handleDragAndDrop(handLandmarks, agentId) {
+            if (!handLandmarks) {
+                if (man.grabbedBy === agentId) man = { x: 0.5, y: 0.8, grabbedBy: null, color: "#facc15" };
+                if (lever.grabbedBy === agentId) lever.grabbedBy = null;
+                return;
+            }
+
+            const pinch = isPinching(handLandmarks);
+            const px = (handLandmarks[4].x + handLandmarks[8].x) / 2;
+            const py = (handLandmarks[4].y + handLandmarks[8].y) / 2;
+
+            if (pinch) {
+                let grabbedAnything = (man.grabbedBy === agentId) || (lever.grabbedBy === agentId);
+
+                // Попытка схватить человечка
+                if (!grabbedAnything && !man.grabbedBy) {
+                    if (Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2)) < 0.15) {
+                        man.grabbedBy = agentId;
+                        grabbedAnything = true;
+                    }
+                }
+                // Попытка схватить ручку рычага
+                if (!grabbedAnything && !lever.grabbedBy) {
+                    if (Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) < 0.15) {
+                        lever.grabbedBy = agentId;
+                        grabbedAnything = true;
+                    }
+                }
+
+                // Перетаскивание
+                if (man.grabbedBy === agentId) {
+                    man.x = px; man.y = py;
+                    
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(px * canvasElement.width, py * canvasElement.height);
+                    canvasCtx.lineTo(man.x * canvasElement.width, man.y * canvasElement.height);
+                    canvasCtx.strokeStyle = agentId === 'ghost' ? '#06b6d4' : '#f97316';
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.stroke();
+                    drawUnmirroredText(canvasCtx, agentId, px * canvasElement.width, py * canvasElement.height - 30, '16px sans-serif', agentId === 'ghost' ? '#06b6d4' : '#f97316');
+                }
+                if (lever.grabbedBy === agentId) {
+                    // Ограничиваем ход рычага от 0.3 до 0.5 по Y
+                    lever.handleY = Math.max(0.3, Math.min(0.5, py));
+                    
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(px * canvasElement.width, py * canvasElement.height);
+                    canvasCtx.lineTo(lever.x * canvasElement.width, lever.handleY * canvasElement.height);
+                    canvasCtx.strokeStyle = agentId === 'ghost' ? '#06b6d4' : '#f97316';
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.stroke();
+                    drawUnmirroredText(canvasCtx, agentId, px * canvasElement.width, py * canvasElement.height - 30, '16px sans-serif', agentId === 'ghost' ? '#06b6d4' : '#f97316');
+                }
+            } else {
+                if (man.grabbedBy === agentId) man = { x: 0.5, y: 0.8, grabbedBy: null, color: "#facc15" };
+                if (lever.grabbedBy === agentId) lever.grabbedBy = null;
+            }
+        }
+
+        function drawTutorial(ctx) {
+            if (GameState.tutorialStep === 2) {
+                const tx = tutorialTarget.x * canvasElement.width;
+                const ty = tutorialTarget.y * canvasElement.height;
+                const tr = tutorialTarget.radius * Math.min(canvasElement.width, canvasElement.height);
+                
+                ctx.beginPath();
+                ctx.arc(tx, ty, tr, 0, Math.PI * 2);
+                ctx.strokeStyle = '#4ade80';
+                ctx.lineWidth = 4;
+                ctx.setLineDash([10, 10]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                drawUnmirroredText(ctx, 'ЦЕЛЬ', tx, ty - tr - 10, '20px sans-serif', '#4ade80');
+                
+                const bx = tutorialBox.x * canvasElement.width;
+                const by = tutorialBox.y * canvasElement.height;
+                const size = 40;
+                
+                ctx.fillStyle = tutorialBox.grabbedBy ? '#f97316' : '#facc15';
+                ctx.fillRect(bx - size/2, by - size/2, size, size);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(bx - size/2, by - size/2, size, size);
+                drawUnmirroredText(ctx, 'БЛОК', bx, by - size/2 - 10, '16px sans-serif', 'white');
+            } else if (GameState.tutorialStep === 3) {
+                const cx = canvasElement.width / 2;
+                const cy = canvasElement.height / 2;
+                drawUnmirroredText(ctx, 'Сожми кулак и держи!', cx, cy, '32px sans-serif', '#ef4444');
+            }
+        }
+
+        function handleTutorialDrag(handLandmarks) {
+            if (!handLandmarks) {
+                tutorialBox.grabbedBy = null;
+                return;
+            }
+            const pinch = isPinching(handLandmarks);
+            const px = (handLandmarks[4].x + handLandmarks[8].x) / 2;
+            const py = (handLandmarks[4].y + handLandmarks[8].y) / 2;
+            
+            if (pinch) {
+                if (!tutorialBox.grabbedBy) {
+                    if (Math.sqrt(Math.pow(px - tutorialBox.x, 2) + Math.pow(py - tutorialBox.y, 2)) < 0.15) {
+                        tutorialBox.grabbedBy = 'live';
+                    }
+                }
+                
+                if (tutorialBox.grabbedBy === 'live') {
+                    tutorialBox.x = px;
+                    tutorialBox.y = py;
+                    
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(px * canvasElement.width, py * canvasElement.height);
+                    canvasCtx.lineTo(tutorialBox.x * canvasElement.width, tutorialBox.y * canvasElement.height);
+                    canvasCtx.strokeStyle = '#f97316';
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.stroke();
+                }
+            } else {
+                tutorialBox.grabbedBy = null;
+            }
+        }
+
+        function evaluateRules() {
+            // Пружина рычага (если никто не держит, возвращается наверх)
+            if (!lever.grabbedBy && lever.handleY > 0.3) {
+                lever.handleY -= 0.02; // скорость возврата
+            }
+
+            lever.active = lever.handleY >= 0.48; // Активируется в самом низу
+            door.open = lever.active;
+
+            // Победа
+            if (door.open) {
+                if (Math.abs(man.x - door.x) < door.width/2 && Math.abs(man.y - door.y) < door.height/2) {
+                    if (GameState.mode === 'PLAYING') {
+                        GameState.mode = 'WON';
+                        GameState.baseInstruction = "🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!";
+                        setTimeout(() => {
+                            GameState.mode = 'IDLE';
+                            man = { x: 0.5, y: 0.8, grabbedBy: null, color: '#facc15' };
+                            lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+                            modeIndicator.innerText = "ОЖИДАНИЕ...";
+                            modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
+                            GameState.baseInstruction = "Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!";
+                            instruction.innerHTML = GameState.baseInstruction;
+                        }, 5000);
+                    }
+                }
+            }
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (GameState.mode === 'WON') {
+                drawWorld();
+                canvasCtx.restore();
+                modeIndicator.innerText = "УСПЕХ!";
+                modeIndicator.className = "status-box text-2xl font-bold text-green-400 playing";
+                instruction.innerHTML = "🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!";
+                return;
+            }
+
+            const liveHand = results.multiHandLandmarks ? results.multiHandLandmarks[0] : null;
+            const now = Date.now();
+
+            if (liveHand && (GameState.mode === 'RECORDING' || GameState.mode === 'PLAYING' || (GameState.mode === 'TUTORIAL' && GameState.tutorialStep === 3))) {
+                if (fistStabilizer.update(isFist(liveHand))) {
+                    fistStabilizer.currentStableValue = false;
+                    fistStabilizer.candidateValue = false;
+                    fistStabilizer.consecutiveCount = 0;
+                    
+                    if (GameState.mode === 'TUTORIAL') {
+                        GameState.mode = 'IDLE';
+                        modeIndicator.innerText = "ОЖИДАНИЕ...";
+                        modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
+                        GameState.baseInstruction = "Обучение завершено! Покажи открытую ладонь, чтобы начать!";
+                    } else {
+                        GameState.mode = 'IDLE';
+                        man = { x: 0.5, y: 0.8, grabbedBy: null, color: '#facc15' };
+                        lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+                        modeIndicator.innerText = "ОЖИДАНИЕ...";
+                        modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
+                        GameState.baseInstruction = "Сброс! Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!";
+                    }
+                    instruction.innerHTML = GameState.baseInstruction;
+                    canvasCtx.restore();
+                    return;
+                }
+
+                if (fistStabilizer.candidateValue === true && fistStabilizer.consecutiveCount > 0) {
+                    const wrist = liveHand[0];
+                    const px = wrist.x * canvasElement.width;
+                    const py = wrist.y * canvasElement.height;
+                    const progress = fistStabilizer.consecutiveCount / fistStabilizer.framesRequired;
+                    
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(px, py, 60, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress);
+                    canvasCtx.strokeStyle = '#ef4444';
+                    canvasCtx.lineWidth = 8;
+                    canvasCtx.stroke();
+                    
+                    let text = GameState.mode === 'TUTORIAL' ? 'ОТЛИЧНО!' : 'СБРОС ПЕТЛИ';
+                    drawUnmirroredText(canvasCtx, text, px, py - 80, 'bold 24px sans-serif', '#ef4444');
+                }
+            }
+
+            if (GameState.mode === 'TUTORIAL') {
+                if (GameState.tutorialStep === 1) {
+                    if (liveHand && isOpenPalm(liveHand)) {
+                        GameState.tutorialStep = 2;
+                        GameState.baseInstruction = "ОБУЧЕНИЕ 2/3: Щипком перетащи БЛОК в ЦЕЛЬ!";
+                        modeIndicator.innerText = "ОБУЧЕНИЕ 2/3";
+                    }
+                } else if (GameState.tutorialStep === 2) {
+                    handleTutorialDrag(liveHand);
+                    if (!tutorialBox.grabbedBy) {
+                        const dist = Math.sqrt(Math.pow(tutorialBox.x - tutorialTarget.x, 2) + Math.pow(tutorialBox.y - tutorialTarget.y, 2));
+                        if (dist < tutorialTarget.radius) {
+                            GameState.tutorialStep = 3;
+                            GameState.baseInstruction = "ОБУЧЕНИЕ 3/3: Сожми КУЛАК и держи его (сброс петли)!";
+                            modeIndicator.innerText = "ОБУЧЕНИЕ 3/3";
+                        }
+                    }
+                }
+            } else if (GameState.mode === 'IDLE') {
+                if (liveHand && isOpenPalm(liveHand)) {
+                    GameState.mode = 'RECORDING';
+                    GameState.recordStartTime = now;
+                    GameState.frames = [];
+                    // Сброс сцены
+                    man = { x: 0.5, y: 0.8, grabbedBy: null, color: '#facc15' };
+                    lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+                    
+                    modeIndicator.innerText = `🔴 ЗАПИСЬ (10с)`;
+                    modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
+                    GameState.baseInstruction = "Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)";
+                }
+            } 
+            else if (GameState.mode === 'RECORDING') {
+                const timeLeft = Math.ceil((GameState.RECORD_DURATION - (now - GameState.recordStartTime))/1000);
+                modeIndicator.innerText = `🔴 ЗАПИСЬ: ${timeLeft}с`;
+
+                if (now - GameState.recordStartTime > GameState.RECORD_DURATION) {
+                    GameState.mode = 'PLAYING';
+                    GameState.currentFrame = 0;
+                    lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+                    man = { x: 0.5, y: 0.8, grabbedBy: null, color: "#facc15" };
+                    
+                    modeIndicator.innerText = "👻 ПЕТЛЯ";
+                    modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
+                    GameState.baseInstruction = "Клон держит рычаг. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!";
+                } else {
+                    GameState.frames.push(liveHand ? JSON.parse(JSON.stringify(liveHand)) : null); 
+                }
+            }
+            else if (GameState.mode === 'PLAYING') {
+                const ghostHand = GameState.frames[GameState.currentFrame];
+                
+                handleDragAndDrop(ghostHand, 'ghost');
+                
+                if (ghostHand) {
+                    drawConnectors(canvasCtx, ghostHand, HAND_CONNECTIONS, {color: '#06b6d4', lineWidth: 4});
+                    drawLandmarks(canvasCtx, ghostHand, {color: '#ffffff', lineWidth: 2, radius: 4});
+                }
+                
+                GameState.currentFrame++;
+                if (GameState.currentFrame >= GameState.frames.length) {
+                    GameState.mode = 'IDLE';
+                    lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+                    man = { x: 0.5, y: 0.8, grabbedBy: null, color: "#facc15" };
+                    modeIndicator.innerText = "ПРОВАЛ...";
+                    modeIndicator.className = "status-box text-2xl font-bold text-red-500";
+                    GameState.baseInstruction = "Время вышло! Дверь захлопнулась. Подними ладонь для рестарта.";
+                }
+            }
+
+            if (GameState.mode !== 'IDLE') {
+                handleDragAndDrop(liveHand, 'live');
+            }
+
+            let currentHint = "";
+            if (liveHand && GameState.mode !== 'WON') {
+                if (GameState.mode === 'TUTORIAL') {
+                    if (liveHand[0].y > 0.8) {
+                        currentHint = "Подними руку выше в кадр!";
+                    }
+                } else {
+                    const isPinch = isPinching(liveHand);
+                    const px = (liveHand[4].x + liveHand[8].x) / 2;
+                    const py = (liveHand[4].y + liveHand[8].y) / 2;
+                    const distMan = Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2));
+                    const distLever = Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2));
+                    let closestDist = Math.min(distMan, distLever);
+                    
+                    const tips = [8, 12, 16, 20];
+                    const joints = [6, 10, 14, 18];
+                    const fingerNames = ['указательный', 'средний', 'безымянный', 'мизинец'];
+                    let straight = 0;
+                    let bentFingers = [];
+                    for(let i=0; i<4; i++) {
+                        if (liveHand[tips[i]].y < liveHand[joints[i]].y) {
+                            straight++;
+                        } else {
+                            bentFingers.push(fingerNames[i]);
+                        }
+                    }
+
+                    if (liveHand[0].y > 0.8) {
+                        currentHint = "Подними руку выше в кадр, иначе твой клон исчезнет из записи!";
+                    } else if (isPinch && (GameState.mode === 'RECORDING' || GameState.mode === 'PLAYING') && man.grabbedBy !== 'live' && lever.grabbedBy !== 'live' && closestDist > 0.15 && closestDist <= 0.30) {
+                        let target = distMan < distLever ? man : lever;
+                        let targetName = distMan < distLever ? 'Человечком' : 'Рычагом';
+                        let targetY = distMan < distLever ? target.y : target.handleY;
+                        let dx = px - target.x;
+                        let dy = py - targetY;
+                        
+                        let dirX = dx > 0 ? 'правее' : 'левее'; 
+                        let dirY = dy > 0 ? 'выше' : 'ниже';
+                        let moveInstruction = Math.abs(dx) > Math.abs(dy) ? dirX : dirY;
+                        
+                        currentHint = `Промах! Ты сжал пальцы рядом с ${targetName}, сдвинь руку ${moveInstruction}!`;
+                    } else if (GameState.mode === 'IDLE' && straight >= 1 && straight <= 3) {
+                        currentHint = `Выпрями все пальцы (согнут ${bentFingers.join(', ')}), чтобы начать!`;
+                    }
+                }
+            }
+
+            const stableHint = hintStabilizer.update(currentHint);
+            instruction.innerHTML = stableHint ? stableHint : GameState.baseInstruction;
+
+            if (liveHand) {
+                const isPinch = isPinching(liveHand);
+                drawConnectors(canvasCtx, liveHand, HAND_CONNECTIONS, {color: isPinch ? '#facc15' : '#f97316', lineWidth: 5});
+                drawLandmarks(canvasCtx, liveHand, {color: '#ffffff', lineWidth: 2, radius: 5});
+            }
+
+            if (GameState.mode === 'TUTORIAL') {
+                drawTutorial(canvasCtx);
+            } else {
+                evaluateRules();
+                if (GameState.mode === 'WON') {
+                    instruction.innerHTML = GameState.baseInstruction;
+                }
+                drawWorld();
+            }
+            canvasCtx.restore();
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 1280, height: 720
+        });
+        camera.start();
+    </script>
+</body>
+</html>

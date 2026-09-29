@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ЭХО</title>
+    <style>body,html{background-color:#1a1a1a;width:100%;height:100%;margin:0;padding:0;overflow:hidden}#game-container{justify-content:center;align-items:center;width:100%;height:100%;display:flex;position:relative}#camera-video{object-fit:cover;opacity:.25;z-index:1;width:100%;height:100%;position:absolute}#game-canvas{z-index:2;position:absolute}#ui-overlay{z-index:3;pointer-events:none;position:absolute;inset:0}</style>
+    <script type="module" crossorigin src="/assets/index-Ds304sbK.js"></script>
+  </head>
+  <body>
+    <div id="game-container">
+      <video id="camera-video" autoplay playsinline></video>
+      <canvas id="game-canvas" width="1000" height="600"></canvas>
+      <div id="ui-overlay"></div>
+    </div>
+  </body>
+</html>
