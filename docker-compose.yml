@@ -1,0 +1,10 @@
+services:
+  echo-game:
+    build:
+      context: ./echo
+      dockerfile: Dockerfile
+    container_name: echo-game
+    ports:
+      - "${PORT:-5173}:80"
+      - "${HTTP_PORT:-80}:80"
+    restart: unless-stopped
