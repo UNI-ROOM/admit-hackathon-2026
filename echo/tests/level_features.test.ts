@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { 
     gameState, laser, plate, man, lever, door,
-    resetLevel, evaluateRules, handleDragAndDrop 
+    resetLevel, evaluateRules, handleDragAndDrop, getAgentColor, getAgentName
 } from '../src/game';
 import { LEVELS } from '../src/levels';
 
@@ -54,6 +54,16 @@ test('Multi-echo logic: maxEchoes is 2 for Level 3, 1 for Levels 1 and 2', () =>
     gameState.currentLevel = 3;
     resetLevel();
     assert.strictEqual(gameState.maxEchoes, 2, 'gameState.maxEchoes must be 2 on Level 3');
+});
+
+test('Multi-echo agent styling and naming (ghost_0, ghost_1, live)', () => {
+    assert.strictEqual(getAgentName('ghost_0'), 'Клон 1');
+    assert.strictEqual(getAgentName('ghost_1'), 'Клон 2');
+    assert.strictEqual(getAgentName('live'), 'Вы');
+
+    assert.strictEqual(getAgentColor('ghost_0'), '#06b6d4');
+    assert.strictEqual(getAgentColor('ghost_1'), '#a855f7');
+    assert.strictEqual(getAgentColor('live'), '#f97316');
 });
 
 test('Moving laser parameters (minX, maxX, speed) exist on Level 2 and Level 3', () => {
@@ -124,18 +134,50 @@ test('Frame progress synchronization between clones and laser oscillation', () =
             `Laser x (${laser.x}) out of bounds [${laser.minX}, ${laser.maxX}] at frame ${f}`
         );
     }
+});
 
-    // Shield (plate) blocks laser oscillation
-    assert.ok(plate, 'Plate must be present on Level 2');
+test('Laser collision and shield blocking mechanics', () => {
+    gameState.currentLevel = 2;
+    resetLevel();
+    assert.ok(laser, 'Laser should be present on Level 2');
+    assert.ok(plate, 'Shield plate should be present on Level 2');
+
+    gameState.mode = 'PLAYING';
+    gameState.recordedEchoes = [new Array(50).fill(null)];
+    gameState.currentFrame = 0;
+
+    // Laser default position
+    evaluateRules();
+
+    // 1. Man touches laser without shield -> man dies and resets to spawn
+    man.x = laser.x;
+    man.y = 0.5;
+    man.grabbedBy = 'live';
+    evaluateRules();
+
+    const lvl2 = LEVELS.find(l => l.id === 2)!;
+    assert.strictEqual(man.x, lvl2.man.x, 'Man should be reset to spawn x on laser death');
+    assert.strictEqual(man.y, lvl2.man.y, 'Man should be reset to spawn y on laser death');
+    assert.strictEqual(man.grabbedBy, null, 'Man grabbedBy should be cleared on death');
+
+    // 2. Shield plate placed directly under laser source above man -> blocks laser beam
     plate.x = laser.x;
-    plate.y = 0.4;
+    plate.y = 0.3;
     plate.height = 0.05;
     evaluateRules();
-    const expectedLaserHeight = Math.max(0, (plate.y - plate.height / 2) - laser.y);
-    assert.ok(
-        Math.abs(laser.height - expectedLaserHeight) < 1e-4,
-        `Laser height (${laser.height}) should be truncated by plate (${expectedLaserHeight})`
-    );
+
+    const expectedHeight = (plate.y - plate.height / 2) - laser.y;
+    assert.ok(Math.abs(laser.height - expectedHeight) < 1e-4, 'Laser beam should be stopped by plate');
+
+    // Now man walks below the shield at y = 0.7 -> laser does not reach man
+    man.x = laser.x;
+    man.y = 0.7;
+    man.grabbedBy = 'live';
+    evaluateRules();
+
+    assert.strictEqual(man.x, laser.x, 'Man should survive under the shield');
+    assert.strictEqual(man.y, 0.7, 'Man y should remain unchanged');
+    assert.strictEqual(man.grabbedBy, 'live', 'Man should still be held by live player');
 });
 
 test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {

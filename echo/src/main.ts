@@ -19,6 +19,7 @@ const canvasCtx = canvasElement.getContext('2d')!;
 const modeIndicator = document.getElementById('mode-indicator')!;
 const instruction = document.getElementById('instruction')!;
 const levelSwitcher = document.getElementById('level-switcher') as HTMLSelectElement;
+let wonTimeout: any = null;
 
 if (levelSwitcher) {
     const tutOption = document.createElement('option');
@@ -33,12 +34,21 @@ if (levelSwitcher) {
         levelSwitcher.appendChild(option);
     });
 
+    levelSwitcher.value = gameState.mode === 'TUTORIAL' ? '0' : gameState.currentLevel.toString();
+
     levelSwitcher.addEventListener('change', (e) => {
         const target = e.target as HTMLSelectElement;
         const levelIndex = parseInt(target.value, 10);
         
+        if (wonTimeout) {
+            clearTimeout(wonTimeout);
+            wonTimeout = null;
+            gameState['wonTimeoutSet'] = false;
+        }
+
         gameState.recordedEchoes = [];
         gameState.echoIndex = 0;
+        gameState.currentFrame = 0;
 
         if (levelIndex === 0) {
             gameState.currentLevel = 1;
@@ -96,7 +106,8 @@ function onResults(results: any) {
         // Reset after 5 seconds
         if (!gameState['wonTimeoutSet']) {
             gameState['wonTimeoutSet'] = true;
-            setTimeout(() => {
+            wonTimeout = setTimeout(() => {
+                wonTimeout = null;
                 gameState.currentLevel = Math.min(gameState.currentLevel + 1, LEVELS.length);
                 gameState.mode = 'IDLE';
                 gameState.recordedEchoes = [];

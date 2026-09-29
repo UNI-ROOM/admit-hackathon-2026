@@ -3,7 +3,8 @@ body { margin: 0; background-color: #050510; color: white; overflow: hidden; fon
 #webcam { display: none; }
 #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 10; }
 #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem; box-sizing: border-box; }
-.status-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 12px; backdrop-filter: blur(5px); text-align: center; transition: all 0.3s ease; }
+.status-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 12px; backdrop-filter: blur(5px); text-align: center; transition: all 0.3s ease; pointer-events: auto; }
+#level-switcher { pointer-events: auto; cursor: pointer; }
 .recording { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
 .playing { border-color: #06b6d4; box-shadow: 0 0 20px rgba(6, 182, 212, 0.5); }
 
