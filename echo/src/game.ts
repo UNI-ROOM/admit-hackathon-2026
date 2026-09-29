@@ -6,12 +6,40 @@ export const gameState: GameState = {
     mode: 'TUTORIAL', 
     tutorialStep: 1,
     frames: [], 
+    recordedEchoes: [],
+    echoIndex: 0,
+    maxEchoes: 1,
+    playStartTime: 0,
     currentFrame: 0,
     recordStartTime: 0,
     RECORD_DURATION: 10000,
     currentLevel: 1,
     baseInstruction: "ОБУЧЕНИЕ 1/3: Покажи полностью открытую ладонь!"
 };
+
+export function getAgentColor(agentId: string): string {
+    if (agentId === 'ghost_0' || agentId === 'ghost') return '#06b6d4';
+    if (agentId === 'ghost_1') return '#a855f7';
+    if (agentId === 'ghost_2') return '#3b82f6';
+    if (agentId === 'live') return '#f97316';
+    return '#f97316';
+}
+
+export function getAgentAlphaColor(agentId: string): string {
+    if (agentId === 'ghost_0' || agentId === 'ghost') return 'rgba(6, 182, 212, 0.3)';
+    if (agentId === 'ghost_1') return 'rgba(168, 85, 247, 0.3)';
+    if (agentId === 'ghost_2') return 'rgba(59, 130, 246, 0.3)';
+    if (agentId === 'live') return 'rgba(249, 115, 22, 0.3)';
+    return 'rgba(249, 115, 22, 0.3)';
+}
+
+export function getAgentName(agentId: string): string {
+    if (agentId === 'ghost_0' || agentId === 'ghost') return 'Клон 1';
+    if (agentId === 'ghost_1') return 'Клон 2';
+    if (agentId === 'ghost_2') return 'Клон 3';
+    if (agentId === 'live') return 'Вы';
+    return agentId;
+}
 
 export let man: Man = { x: 0.5, y: 0.8, grabbedBy: null, color: '#facc15' }; 
 export let lever: Lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
@@ -26,6 +54,7 @@ export let plate: Plate | null = null;
 export function resetLevel() {
     const levelIndex = Math.min(gameState.currentLevel - 1, LEVELS.length - 1);
     const lvl = LEVELS[levelIndex];
+    gameState.maxEchoes = lvl.maxEchoes || 1;
     man = { x: lvl.man.x, y: Math.min(lvl.man.y, 0.8), grabbedBy: null, color: '#facc15' };
     
     if (lvl.lever) {
@@ -75,7 +104,7 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
     if (m.grabbedBy) {
         ctx.beginPath();
         ctx.arc(pxX, pxY, size*2.5, 0, Math.PI * 2);
-        ctx.fillStyle = m.grabbedBy === 'ghost' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(249, 115, 22, 0.3)';
+        ctx.fillStyle = getAgentAlphaColor(m.grabbedBy);
         ctx.fill();
     }
 }
@@ -102,7 +131,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         if (lever.grabbedBy) {
             ctx.beginPath();
             ctx.arc(lvx, handleY, 40, 0, Math.PI * 2);
-            ctx.fillStyle = lever.grabbedBy === 'ghost' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(249, 115, 22, 0.3)';
+            ctx.fillStyle = getAgentAlphaColor(lever.grabbedBy);
             ctx.fill();
         }
 
@@ -149,12 +178,19 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         const pw = plate.width * canvasWidth;
         const ph = plate.height * canvasHeight;
         
-        ctx.fillStyle = plate.grabbedBy ? '#0ea5e9' : '#0284c7';
+        ctx.fillStyle = plate.grabbedBy ? (plate.grabbedBy === 'live' ? '#f97316' : '#0ea5e9') : '#0284c7';
         ctx.fillRect(px - pw/2, py - ph/2, pw, ph);
-        ctx.strokeStyle = '#bae6fd';
+        ctx.strokeStyle = plate.grabbedBy ? getAgentColor(plate.grabbedBy) : '#bae6fd';
         ctx.lineWidth = 3;
         ctx.strokeRect(px - pw/2, py - ph/2, pw, ph);
         
+        if (plate.grabbedBy) {
+            ctx.beginPath();
+            ctx.arc(px, py, pw * 0.7, 0, Math.PI * 2);
+            ctx.fillStyle = getAgentAlphaColor(plate.grabbedBy);
+            ctx.fill();
+        }
+
         drawUnmirroredText(ctx, 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
     }
 
@@ -196,6 +232,9 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             }
         }
 
+        const agentColor = getAgentColor(agentId);
+        const agentName = getAgentName(agentId);
+
         if (man.grabbedBy === agentId) {
             man.x += (px - man.x) * 0.15; 
             man.y += (py - man.y) * 0.15;
@@ -203,10 +242,10 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             ctx.beginPath();
             ctx.moveTo(px * canvasWidth, py * canvasHeight);
             ctx.lineTo(man.x * canvasWidth, man.y * canvasHeight);
-            ctx.strokeStyle = agentId === 'ghost' ? '#06b6d4' : '#f97316';
+            ctx.strokeStyle = agentColor;
             ctx.lineWidth = 4;
             ctx.stroke();
-            drawUnmirroredText(ctx, agentId, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentId === 'ghost' ? '#06b6d4' : '#f97316');
+            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
         }
         if (lever.grabbedBy === agentId) {
             lever.handleY = Math.max(lever.y, Math.min(lever.y + 0.2, py));
@@ -214,10 +253,10 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             ctx.beginPath();
             ctx.moveTo(px * canvasWidth, py * canvasHeight);
             ctx.lineTo(lever.x * canvasWidth, lever.handleY * canvasHeight);
-            ctx.strokeStyle = agentId === 'ghost' ? '#06b6d4' : '#f97316';
+            ctx.strokeStyle = agentColor;
             ctx.lineWidth = 4;
             ctx.stroke();
-            drawUnmirroredText(ctx, agentId, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentId === 'ghost' ? '#06b6d4' : '#f97316');
+            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
         }
         if (plate && plate.grabbedBy === agentId) {
             plate.x += (px - plate.x) * 0.15;
@@ -226,10 +265,10 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             ctx.beginPath();
             ctx.moveTo(px * canvasWidth, py * canvasHeight);
             ctx.lineTo(plate.x * canvasWidth, plate.y * canvasHeight);
-            ctx.strokeStyle = agentId === 'ghost' ? '#06b6d4' : '#f97316';
+            ctx.strokeStyle = agentColor;
             ctx.lineWidth = 4;
             ctx.stroke();
-            drawUnmirroredText(ctx, agentId, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentId === 'ghost' ? '#06b6d4' : '#f97316');
+            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
         }
     } else {
         if (man.grabbedBy === agentId) man.grabbedBy = null;
@@ -332,6 +371,23 @@ export function evaluateRules() {
     
     // Laser logic
     if (laser) {
+        if (laser.active && laser.minX !== undefined && laser.maxX !== undefined) {
+            let t = 0;
+            if (gameState.mode === 'RECORDING') {
+                t = (Date.now() - gameState.recordStartTime) / 1000;
+            } else if (gameState.mode === 'PLAYING') {
+                const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
+                const progress = maxFrames > 0 ? (gameState.currentFrame / maxFrames) : 0;
+                t = progress * (gameState.RECORD_DURATION / 1000);
+            } else {
+                t = Date.now() / 1000;
+            }
+            const speed = laser.speed || 1.5;
+            const midX = (laser.minX + laser.maxX) / 2;
+            const amp = (laser.maxX - laser.minX) / 2;
+            laser.x = midX + Math.sin(t * speed) * amp;
+        }
+
         laser.height = 1.0 - laser.y; // Default goes to bottom
         
         if (plate) {

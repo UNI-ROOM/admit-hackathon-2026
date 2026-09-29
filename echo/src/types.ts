@@ -45,12 +45,19 @@ export interface Laser {
     width: number;
     height: number;
     active: boolean;
+    minX?: number;
+    maxX?: number;
+    speed?: number;
 }
 
 export interface GameState {
     mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON';
     tutorialStep: number;
     frames: any[];
+    recordedEchoes: any[][];
+    echoIndex: number;
+    maxEchoes: number;
+    playStartTime: number;
     currentFrame: number;
     recordStartTime: number;
     RECORD_DURATION: number;

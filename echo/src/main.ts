@@ -2,7 +2,8 @@ import './style.css';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
 import { 
     gameState, man, lever, tutorialBox, tutorialTarget, 
-    resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules 
+    resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
+    getAgentColor, plate
 } from './game';
 import { LEVELS } from './levels';
 
@@ -17,6 +18,59 @@ const canvasElement = document.getElementById('game-canvas') as HTMLCanvasElemen
 const canvasCtx = canvasElement.getContext('2d')!;
 const modeIndicator = document.getElementById('mode-indicator')!;
 const instruction = document.getElementById('instruction')!;
+const levelSwitcher = document.getElementById('level-switcher') as HTMLSelectElement;
+
+if (levelSwitcher) {
+    const tutOption = document.createElement('option');
+    tutOption.value = '0';
+    tutOption.text = 'Обучение';
+    levelSwitcher.appendChild(tutOption);
+    
+    LEVELS.forEach((lvl, index) => {
+        const option = document.createElement('option');
+        option.value = (index + 1).toString();
+        option.text = lvl.title;
+        levelSwitcher.appendChild(option);
+    });
+
+    levelSwitcher.addEventListener('change', (e) => {
+        const target = e.target as HTMLSelectElement;
+        const levelIndex = parseInt(target.value, 10);
+        
+        gameState.recordedEchoes = [];
+        gameState.echoIndex = 0;
+
+        if (levelIndex === 0) {
+            gameState.currentLevel = 1;
+            gameState.mode = 'TUTORIAL';
+            gameState.tutorialStep = 1;
+            resetLevel();
+            gameState.baseInstruction = "ОБУЧЕНИЕ 1/3: Покажи полностью открытую ладонь!";
+            instruction.innerHTML = gameState.baseInstruction;
+            modeIndicator.innerText = "ОБУЧЕНИЕ 1/3";
+            modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400";
+            const titleEl = document.getElementById('level-title');
+            if (titleEl) titleEl.innerText = "Обучение";
+        } else {
+            gameState.currentLevel = levelIndex;
+            gameState.mode = 'IDLE';
+            gameState.tutorialStep = 4; // safely clear tutorial step
+            
+            resetLevel();
+            
+            modeIndicator.innerText = "ОЖИДАНИЕ...";
+            modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
+            gameState.baseInstruction = "Уровень загружен! Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!";
+            instruction.innerHTML = gameState.baseInstruction;
+            
+            const titleEl = document.getElementById('level-title');
+            if (titleEl) {
+                titleEl.innerText = LEVELS[levelIndex - 1].title;
+            }
+        }
+    });
+}
+
 
 function resizeCanvas() {
     canvasElement.width = window.innerWidth;
@@ -37,14 +91,16 @@ function onResults(results: any) {
         canvasCtx.restore();
         modeIndicator.innerText = "УСПЕХ!";
         modeIndicator.className = "status-box text-2xl font-bold text-green-400 playing";
-        instruction.innerHTML = "🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!";
+        instruction.innerHTML = "🏆 ГЕНИАЛЬНО! Вы и ваши клоны спасли его!";
         
         // Reset after 5 seconds
         if (!gameState['wonTimeoutSet']) {
             gameState['wonTimeoutSet'] = true;
             setTimeout(() => {
-                gameState.currentLevel++;
+                gameState.currentLevel = Math.min(gameState.currentLevel + 1, LEVELS.length);
                 gameState.mode = 'IDLE';
+                gameState.recordedEchoes = [];
+                gameState.echoIndex = 0;
                 resetLevel();
                 modeIndicator.innerText = "ОЖИДАНИЕ...";
                 modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
@@ -55,6 +111,10 @@ function onResults(results: any) {
                 if (titleEl) {
                     const lvlIdx = Math.min(gameState.currentLevel - 1, LEVELS.length - 1);
                     titleEl.innerText = LEVELS[lvlIdx].title;
+                }
+                
+                if (levelSwitcher) {
+                    levelSwitcher.value = Math.min(gameState.currentLevel, LEVELS.length).toString();
                 }
                 
                 gameState['wonTimeoutSet'] = false;
@@ -72,6 +132,9 @@ function onResults(results: any) {
             fistStabilizer.candidateValue = false;
             fistStabilizer.consecutiveCount = 0;
             
+            gameState.recordedEchoes = [];
+            gameState.echoIndex = 0;
+
             if (gameState.mode === 'TUTORIAL') {
                 gameState.mode = 'IDLE';
                 resetLevel();
@@ -129,43 +192,107 @@ function onResults(results: any) {
         if (liveHand && isOpenPalm(liveHand)) {
             gameState.mode = 'RECORDING';
             gameState.recordStartTime = now;
+            gameState.echoIndex = 0;
+            gameState.recordedEchoes = [[]];
             gameState.frames = [];
             resetLevel();
             
-            modeIndicator.innerText = `🔴 ЗАПИСЬ (10с)`;
+            if (gameState.maxEchoes > 1) {
+                modeIndicator.innerText = `🔴 ЗАПИСЬ 1/${gameState.maxEchoes} (10с)`;
+            } else {
+                modeIndicator.innerText = `🔴 ЗАПИСЬ (10с)`;
+            }
             modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
-            gameState.baseInstruction = "Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)";
+            if (gameState.currentLevel === 1) {
+                gameState.baseInstruction = `Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)`;
+            } else if (gameState.currentLevel === 2) {
+                gameState.baseInstruction = `Держи <b class='text-red-400'>ЩИТ</b> под лазером и двигай за ним! (10 сек)`;
+            } else if (gameState.currentLevel === 3) {
+                gameState.baseInstruction = `ЭХО 1/2: Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)`;
+            }
+            instruction.innerHTML = gameState.baseInstruction;
         }
     } 
     else if (gameState.mode === 'RECORDING') {
         const timeLeft = Math.ceil((gameState.RECORD_DURATION - (now - gameState.recordStartTime))/1000);
-        modeIndicator.innerText = `🔴 ЗАПИСЬ: ${timeLeft}с`;
+        if (gameState.maxEchoes > 1) {
+            modeIndicator.innerText = `🔴 ЗАПИСЬ ${gameState.echoIndex + 1}/${gameState.maxEchoes}: ${timeLeft}с`;
+        } else {
+            modeIndicator.innerText = `🔴 ЗАПИСЬ: ${timeLeft}с`;
+        }
 
         if (now - gameState.recordStartTime > gameState.RECORD_DURATION) {
-            gameState.mode = 'PLAYING';
-            gameState.currentFrame = 0;
-            resetLevel();
-            
-            modeIndicator.innerText = "👻 ПЕТЛЯ";
-            modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
-            gameState.baseInstruction = "Клон держит рычаг. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!";
+            if (gameState.echoIndex + 1 < gameState.maxEchoes) {
+                gameState.echoIndex++;
+                gameState.recordedEchoes[gameState.echoIndex] = [];
+                gameState.recordStartTime = now;
+                gameState.currentFrame = 0;
+                resetLevel();
+                
+                modeIndicator.innerText = `🔴 ЗАПИСЬ ${gameState.echoIndex + 1}/${gameState.maxEchoes} (10с)`;
+                if (gameState.currentLevel === 3) {
+                    gameState.baseInstruction = `ЭХО 2/2: Клон 1 держит рычаг. А ты держи <b class='text-blue-400'>ЩИТ</b> и двигай за лазером! (10 сек)`;
+                } else {
+                    gameState.baseInstruction = `ЭХО ${gameState.echoIndex + 1}/${gameState.maxEchoes}: Продолжай запись! (10 сек)`;
+                }
+                instruction.innerHTML = gameState.baseInstruction;
+            } else {
+                gameState.mode = 'PLAYING';
+                gameState.playStartTime = now;
+                gameState.currentFrame = 0;
+                resetLevel();
+                
+                modeIndicator.innerText = "👻 ПЕТЛЯ";
+                modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
+                if (gameState.currentLevel === 1) {
+                    gameState.baseInstruction = `Клон держит рычаг. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!`;
+                } else if (gameState.currentLevel === 2) {
+                    gameState.baseInstruction = `Клон держит щит. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!`;
+                } else {
+                    gameState.baseInstruction = `Клоны держат рычаг и щит! А ТЫ хватай человечка и спасай его к <b class='text-green-400'>ДВЕРИ</b>!`;
+                }
+                instruction.innerHTML = gameState.baseInstruction;
+            }
         } else {
-            gameState.frames.push(liveHand ? JSON.parse(JSON.stringify(liveHand)) : null); 
+            if (!gameState.recordedEchoes[gameState.echoIndex]) {
+                gameState.recordedEchoes[gameState.echoIndex] = [];
+            }
+            const recordedHand = liveHand ? JSON.parse(JSON.stringify(liveHand)) : null;
+            gameState.recordedEchoes[gameState.echoIndex].push(recordedHand);
+            gameState.frames = gameState.recordedEchoes[0];
+
+            const currentRecFrame = gameState.recordedEchoes[gameState.echoIndex].length - 1;
+            for (let i = 0; i < gameState.echoIndex; i++) {
+                const echo = gameState.recordedEchoes[i];
+                const prevHand = echo ? echo[Math.min(currentRecFrame, echo.length - 1)] : null;
+                handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, prevHand, `ghost_${i}`);
+                if (prevHand) {
+                    const ghostColor = getAgentColor(`ghost_${i}`);
+                    drawConnectors(canvasCtx, prevHand, HAND_CONNECTIONS, {color: ghostColor, lineWidth: 4});
+                    drawLandmarks(canvasCtx, prevHand, {color: '#ffffff', lineWidth: 2, radius: 4});
+                }
+            }
         }
     }
     else if (gameState.mode === 'PLAYING') {
-        const ghostHand = gameState.frames[gameState.currentFrame];
+        const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
         
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, ghostHand, 'ghost');
-        
-        if (ghostHand) {
-            drawConnectors(canvasCtx, ghostHand, HAND_CONNECTIONS, {color: '#06b6d4', lineWidth: 4});
-            drawLandmarks(canvasCtx, ghostHand, {color: '#ffffff', lineWidth: 2, radius: 4});
+        for (let i = 0; i < gameState.recordedEchoes.length; i++) {
+            const echo = gameState.recordedEchoes[i];
+            const ghostHand = echo ? echo[gameState.currentFrame] : null;
+            handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, ghostHand, `ghost_${i}`);
+            if (ghostHand) {
+                const ghostColor = getAgentColor(`ghost_${i}`);
+                drawConnectors(canvasCtx, ghostHand, HAND_CONNECTIONS, {color: ghostColor, lineWidth: 4});
+                drawLandmarks(canvasCtx, ghostHand, {color: '#ffffff', lineWidth: 2, radius: 4});
+            }
         }
         
         gameState.currentFrame++;
-        if (gameState.currentFrame >= gameState.frames.length) {
+        if (gameState.currentFrame >= maxFrames) {
             gameState.mode = 'IDLE';
+            gameState.recordedEchoes = [];
+            gameState.echoIndex = 0;
             resetLevel();
             modeIndicator.innerText = "ПРОВАЛ...";
             modeIndicator.className = "status-box text-2xl font-bold text-red-500";
@@ -188,8 +315,9 @@ function onResults(results: any) {
             const px = (liveHand[4].x + liveHand[8].x) / 2;
             const py = (liveHand[4].y + liveHand[8].y) / 2;
             const distMan = Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2));
-            const distLever = Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2));
-            let closestDist = Math.min(distMan, distLever);
+            const distLever = lever.x >= 0 ? Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) : 999;
+            const distPlate = plate ? Math.sqrt(Math.pow(px - plate.x, 2) + Math.pow(py - plate.y, 2)) : 999;
+            let closestDist = Math.min(distMan, distLever, distPlate);
             
             const tips = [8, 12, 16, 20];
             const joints = [6, 10, 14, 18];
@@ -206,11 +334,20 @@ function onResults(results: any) {
 
             if (liveHand[0].y > 0.8) {
                 currentHint = "Подними руку выше в кадр, иначе твой клон исчезнет из записи!";
-            } else if (isPinch && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') && man.grabbedBy !== 'live' && lever.grabbedBy !== 'live' && closestDist > 0.15 && closestDist <= 0.30) {
-                let target = distMan < distLever ? man : lever;
-                let targetName = distMan < distLever ? 'Человечком' : 'Рычагом';
-                let targetY = distMan < distLever ? man.y : lever.handleY;
-                let dx = px - target.x;
+            } else if (isPinch && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') && man.grabbedBy !== 'live' && lever.grabbedBy !== 'live' && (!plate || plate.grabbedBy !== 'live') && closestDist > 0.15 && closestDist <= 0.30) {
+                let targetName = 'Человечком';
+                let targetX = man.x;
+                let targetY = man.y;
+                if (closestDist === distLever) {
+                    targetName = 'Рычагом';
+                    targetX = lever.x;
+                    targetY = lever.handleY;
+                } else if (closestDist === distPlate && plate) {
+                    targetName = 'Щитом';
+                    targetX = plate.x;
+                    targetY = plate.y;
+                }
+                let dx = px - targetX;
                 let dy = py - targetY;
                 
                 let dirX = dx > 0 ? 'правее' : 'левее'; 
