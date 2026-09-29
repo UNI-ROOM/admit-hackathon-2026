@@ -30,6 +30,16 @@ export class Renderer {
         const height = this.canvas.height;
         this.ctx.clearRect(0, 0, width, height);
 
+        // Затемнённый фон из камеры (docs/03-architecture.md §7)
+        if (video.readyState >= 2) {
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.25;
+            this.ctx.translate(width, 0);
+            this.ctx.scale(-1, 1); // зеркалим, чтобы жесты совпадали с экраном
+            this.ctx.drawImage(video, 0, 0, width, height);
+            this.ctx.restore();
+        }
+
 
 
         // Draw lanes
