@@ -1,6 +1,7 @@
-import { GameState, Man, Lever, Door, TutorialBox, TutorialTarget, Laser, Plate } from './types';
+import { GameState, Man, Lever, Door, TutorialBox, TutorialTarget, Laser, Plate, Crystal, Prism, ReflectedLaser } from './types';
 import { drawUnmirroredText, isPinching } from './utils';
 import { LEVELS } from './levels';
+import { playSfx } from './audio';
 
 export const gameState: GameState = {
     mode: 'TUTORIAL', 
@@ -50,6 +51,150 @@ export let tutorialTarget: TutorialTarget = { x: 0.7, y: 0.5, radius: 0.1 };
 
 export let laser: Laser | null = null;
 export let plate: Plate | null = null;
+export let crystal: Crystal | null = null;
+export let prism: Prism | null = null;
+export let reflectedLaser: ReflectedLaser = { active: false, startX: 0, startY: 0, endX: 0, endY: 0 };
+export let deathBanner: { text: string; until: number } = { text: '', until: 0 };
+
+// --- Particle System ---
+export interface Particle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    color: string;
+    alpha: number;
+    decay: number;
+}
+export const particles: Particle[] = [];
+const MAX_PARTICLES = 250;
+
+export function spawnSparks(x: number, y: number, count: number = 5, baseColor: string = '#f59e0b') {
+    for (let i = 0; i < count; i++) {
+        if (particles.length >= MAX_PARTICLES) particles.shift();
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.002 + Math.random() * 0.005;
+        particles.push({
+            x: x + (Math.random() - 0.5) * 0.02,
+            y: y + (Math.random() - 0.5) * 0.02,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 2 + Math.random() * 3,
+            color: baseColor,
+            alpha: 1.0,
+            decay: 0.03 + Math.random() * 0.04
+        });
+    }
+}
+
+export function spawnChargeMotes(x: number, y: number, count: number = 3) {
+    for (let i = 0; i < count; i++) {
+        if (particles.length >= MAX_PARTICLES) particles.shift();
+        particles.push({
+            x: x + (Math.random() - 0.5) * 0.05,
+            y: y + (Math.random() - 0.5) * 0.05,
+            vx: (Math.random() - 0.5) * 0.002,
+            vy: -0.001 - Math.random() * 0.003,
+            size: 3 + Math.random() * 4,
+            color: Math.random() > 0.3 ? '#38bdf8' : '#e0f2fe',
+            alpha: 0.9,
+            decay: 0.015 + Math.random() * 0.02
+        });
+    }
+}
+
+export function spawnBurnExplosion(x: number, y: number) {
+    const colors = ['#ef4444', '#f97316', '#fbbf24', '#78716c', '#44403c'];
+    for (let i = 0; i < 40; i++) {
+        if (particles.length >= MAX_PARTICLES) particles.shift();
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.003 + Math.random() * 0.008;
+        particles.push({
+            x: x + (Math.random() - 0.5) * 0.03,
+            y: y + (Math.random() - 0.5) * 0.03,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 0.002,
+            size: 4 + Math.random() * 6,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            alpha: 1.0,
+            decay: 0.02 + Math.random() * 0.02
+        });
+    }
+}
+
+export function spawnConfetti(_width: number, _height: number) {
+    const colors = ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#eab308', '#f97316'];
+    for (let i = 0; i < 4; i++) {
+        if (particles.length >= MAX_PARTICLES) particles.shift();
+        particles.push({
+            x: Math.random(),
+            y: -0.02,
+            vx: (Math.random() - 0.5) * 0.003,
+            vy: 0.003 + Math.random() * 0.006,
+            size: 4 + Math.random() * 5,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            alpha: 1.0,
+            decay: 0.004 + Math.random() * 0.004
+        });
+    }
+}
+
+export function updateAndDrawParticles(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    if (particles.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= p.decay;
+        if (p.alpha <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+        ctx.globalAlpha = Math.max(0, Math.min(1, p.alpha));
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x * width, p.y * height, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+let lastDeathTime = 0;
+export function triggerManDeath(message: string = 'ЧЕЛОВЕЧЕК СГОРЕЛ! 🔥 ПЕРЕЗАПУСК...') {
+    const now = Date.now();
+    if (now - lastDeathTime < 1000) return;
+    lastDeathTime = now;
+
+    playSfx('burn');
+    spawnBurnExplosion(man.x, man.y);
+    deathBanner = { text: message, until: now + 1600 };
+
+    const lvl = LEVELS[Math.min(gameState.currentLevel - 1, LEVELS.length - 1)];
+    man.x = lvl.man.x;
+    man.y = lvl.man.y;
+    man.grabbedBy = null;
+
+    if (gameState.mode === 'PLAYING') {
+        gameState.currentFrame = 0;
+        if (lvl.plate && plate) {
+            plate.x = lvl.plate.x;
+            plate.y = lvl.plate.y;
+            plate.grabbedBy = null;
+        }
+        if (lvl.prism && prism) {
+            prism.x = lvl.prism.x;
+            prism.y = lvl.prism.y;
+            prism.grabbedBy = null;
+        }
+        if (crystal) {
+            crystal.charge = 0;
+            crystal.charged = false;
+        }
+    }
+}
 
 export function resetLevel() {
     const levelIndex = Math.min(gameState.currentLevel - 1, LEVELS.length - 1);
@@ -76,6 +221,37 @@ export function resetLevel() {
     } else {
         plate = null;
     }
+
+    if (lvl.crystal) {
+        crystal = {
+            x: lvl.crystal.x,
+            y: lvl.crystal.y,
+            baseY: lvl.crystal.y,
+            width: lvl.crystal.width,
+            height: lvl.crystal.height,
+            charge: 0,
+            charged: false,
+            grabbedBy: null
+        };
+    } else {
+        crystal = null;
+    }
+
+    if (lvl.prism) {
+        prism = {
+            x: lvl.prism.x,
+            y: lvl.prism.y,
+            width: lvl.prism.width,
+            height: lvl.prism.height,
+            direction: lvl.prism.direction,
+            grabbedBy: null
+        };
+    } else {
+        prism = null;
+    }
+
+    reflectedLaser = { active: false, startX: 0, startY: 0, endX: 0, endY: 0 };
+    deathBanner = { text: '', until: 0 };
 }
 
 export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, m: Man) {
@@ -152,7 +328,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     
     drawUnmirroredText(ctx, door.open ? 'ВЫХОД ОТКРЫТ' : 'ЗАКРЫТО', doorX + doorW/2, doorY - 10, '24px sans-serif', 'white');
 
-    // Laser
+    // Laser (Vertical beam)
     if (laser && laser.active) {
         const lx = laser.x * canvasWidth;
         const ly = laser.y * canvasHeight;
@@ -161,17 +337,52 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(lx - 20, ly - 20, 40, 40);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(lx - 20, ly - 20, 40, 40);
         
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.7)';
-        ctx.fillRect(lx - lw/2, ly, lw, lh);
-        
+        ctx.save();
         ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
         ctx.fillRect(lx - lw/2, ly, lw, lh);
-        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#fca5a5';
+        ctx.shadowBlur = 8;
+        ctx.fillRect(lx - lw * 0.18, ly, lw * 0.36, lh);
+        ctx.restore();
     }
 
-    // Plate
+    // Reflected Laser (Horizontal beam)
+    if (reflectedLaser.active) {
+        const sx = reflectedLaser.startX * canvasWidth;
+        const sy = reflectedLaser.startY * canvasHeight;
+        const ex = reflectedLaser.endX * canvasWidth;
+        const ey = reflectedLaser.endY * canvasHeight;
+
+        ctx.save();
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 16;
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+
+        ctx.shadowColor = '#bae6fd';
+        ctx.shadowBlur = 6;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Plate (Shield)
     if (plate) {
         const px = plate.x * canvasWidth;
         const py = plate.y * canvasHeight;
@@ -194,15 +405,199 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         drawUnmirroredText(ctx, 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
     }
 
+    // Prism
+    if (prism) {
+        const px = prism.x * canvasWidth;
+        const py = prism.y * canvasHeight;
+        const pw = prism.width * canvasWidth;
+        const ph = prism.height * canvasHeight;
+
+        ctx.save();
+        ctx.beginPath();
+        if (prism.direction === 'left') {
+            ctx.moveTo(px + pw / 2, py - ph / 2);
+            ctx.lineTo(px + pw / 2, py + ph / 2);
+            ctx.lineTo(px - pw / 2, py + ph / 2);
+        } else {
+            ctx.moveTo(px - pw / 2, py - ph / 2);
+            ctx.lineTo(px - pw / 2, py + ph / 2);
+            ctx.lineTo(px + pw / 2, py + ph / 2);
+        }
+        ctx.closePath();
+
+        const glassGrad = ctx.createLinearGradient(px - pw / 2, py - ph / 2, px + pw / 2, py + ph / 2);
+        glassGrad.addColorStop(0, 'rgba(224, 242, 254, 0.75)');
+        glassGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.45)');
+        glassGrad.addColorStop(1, 'rgba(14, 165, 233, 0.75)');
+        ctx.fillStyle = glassGrad;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 12;
+        ctx.fill();
+
+        ctx.strokeStyle = prism.grabbedBy ? getAgentColor(prism.grabbedBy) : '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Diagonal reflective glint
+        ctx.beginPath();
+        if (prism.direction === 'left') {
+            ctx.moveTo(px + pw * 0.25, py - ph * 0.25);
+            ctx.lineTo(px - pw * 0.25, py + ph * 0.25);
+        } else {
+            ctx.moveTo(px - pw * 0.25, py - ph * 0.25);
+            ctx.lineTo(px + pw * 0.25, py + ph * 0.25);
+        }
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if (prism.grabbedBy) {
+            ctx.beginPath();
+            ctx.arc(px, py, pw * 0.75, 0, Math.PI * 2);
+            ctx.fillStyle = getAgentAlphaColor(prism.grabbedBy);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        drawUnmirroredText(ctx, 'ПРИЗМА', px, py - ph / 2 - 12, 'bold 16px sans-serif', '#38bdf8');
+    }
+
+    // Crystal
+    if (crystal) {
+        const hoverOffset = Math.sin(Date.now() * 0.003) * 0.012;
+        const cyNorm = (crystal.baseY ?? crystal.y) + hoverOffset;
+        const cx = crystal.x * canvasWidth;
+        const cy = cyNorm * canvasHeight;
+        const cw = crystal.width * canvasWidth;
+        const ch = crystal.height * canvasHeight;
+
+        ctx.save();
+
+        // Pulsating glow and expanding energy rings when charged / charging
+        if (crystal.charge > 0) {
+            const pulse = (Math.sin(Date.now() * 0.008) + 1) * 0.5;
+            const ringRadius = cw * (0.6 + pulse * 0.3 * crystal.charge);
+            ctx.beginPath();
+            ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(56, 189, 248, ${(0.6 * crystal.charge * (1 - pulse * 0.5)).toFixed(2)})`;
+            ctx.lineWidth = 2 + 3 * crystal.charge;
+            ctx.stroke();
+
+            ctx.shadowColor = crystal.charged ? '#00f5ff' : '#38bdf8';
+            ctx.shadowBlur = 15 + 20 * crystal.charge;
+        }
+
+        // Progress ring
+        const progressRadius = Math.max(cw, ch) * 0.65;
+        ctx.beginPath();
+        ctx.arc(cx, cy, progressRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * crystal.charge);
+        ctx.strokeStyle = crystal.charged ? '#4ade80' : '#38bdf8';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Faceted Diamond Gemstone
+        const top = { x: cx, y: cy - ch / 2 };
+        const right = { x: cx + cw / 2, y: cy };
+        const bottom = { x: cx, y: cy + ch / 2 };
+        const left = { x: cx - cw / 2, y: cy };
+        const center = { x: cx, y: cy - ch * 0.08 };
+
+        // Facet 1: Top-Left
+        ctx.beginPath();
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(left.x, left.y);
+        ctx.lineTo(center.x, center.y);
+        ctx.closePath();
+        ctx.fillStyle = crystal.charged ? '#67e8f9' : '#0284c7';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Facet 2: Top-Right
+        ctx.beginPath();
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(right.x, right.y);
+        ctx.lineTo(center.x, center.y);
+        ctx.closePath();
+        ctx.fillStyle = crystal.charged ? '#a5f3fc' : '#38bdf8';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Facet 3: Bottom-Left
+        ctx.beginPath();
+        ctx.moveTo(bottom.x, bottom.y);
+        ctx.lineTo(left.x, left.y);
+        ctx.lineTo(center.x, center.y);
+        ctx.closePath();
+        ctx.fillStyle = crystal.charged ? '#06b6d4' : '#0369a1';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Facet 4: Bottom-Right
+        ctx.beginPath();
+        ctx.moveTo(bottom.x, bottom.y);
+        ctx.lineTo(right.x, right.y);
+        ctx.lineTo(center.x, center.y);
+        ctx.closePath();
+        ctx.fillStyle = crystal.charged ? '#22d3ee' : '#0284c7';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.restore();
+
+        drawUnmirroredText(ctx, 'КРИСТАЛЛ', cx, cy - ch / 2 - 18, 'bold 18px sans-serif', crystal.charged ? '#38bdf8' : '#94a3b8');
+        drawUnmirroredText(ctx, `${Math.round(crystal.charge * 100)}%`, cx, cy + ch / 2 + 24, 'bold 16px sans-serif', crystal.charged ? '#4ade80' : '#38bdf8');
+    }
+
     // Man
     drawMan(ctx, canvasWidth, canvasHeight, man);
+
+    // Death banner
+    if (deathBanner.text && Date.now() < deathBanner.until) {
+        ctx.save();
+        const bw = 560;
+        const bh = 60;
+        const bx = canvasWidth / 2 - bw / 2;
+        const by = canvasHeight * 0.25 - bh / 2;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(bx, by, bw, bh);
+        drawUnmirroredText(ctx, deathBanner.text, canvasWidth / 2, canvasHeight * 0.25 + 8, 'bold 24px sans-serif', '#ef4444');
+        ctx.restore();
+    }
+
+    // Particles VFX
+    updateAndDrawParticles(ctx, canvasWidth, canvasHeight);
+
+    // Confetti on win
+    if (gameState.mode === 'WON') {
+        spawnConfetti(canvasWidth, canvasHeight);
+    }
 }
 
 export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string) {
+    const wasHolding = (man.grabbedBy === agentId) || 
+                       (lever.grabbedBy === agentId) || 
+                       (plate?.grabbedBy === agentId) || 
+                       (prism?.grabbedBy === agentId);
+
     if (!handLandmarks) {
         if (man.grabbedBy === agentId) man.grabbedBy = null;
         if (lever.grabbedBy === agentId) lever.grabbedBy = null;
         if (plate && plate.grabbedBy === agentId) plate.grabbedBy = null;
+        if (prism && prism.grabbedBy === agentId) prism.grabbedBy = null;
+        if (wasHolding) {
+            playSfx('drop');
+        }
         return;
     }
 
@@ -211,24 +606,34 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
     const py = (handLandmarks[4].y + handLandmarks[8].y) / 2;
 
     if (pinch) {
-        let grabbedAnything = (man.grabbedBy === agentId) || (lever.grabbedBy === agentId) || (plate?.grabbedBy === agentId);
+        let grabbedAnything = wasHolding;
 
         if (!grabbedAnything && !man.grabbedBy) {
             if (Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2)) < 0.15) {
                 man.grabbedBy = agentId;
                 grabbedAnything = true;
+                playSfx('grab');
             }
         }
         if (!grabbedAnything && lever.x >= 0 && !lever.grabbedBy) {
             if (Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) < 0.15) {
                 lever.grabbedBy = agentId;
                 grabbedAnything = true;
+                playSfx('grab');
             }
         }
         if (!grabbedAnything && plate && !plate.grabbedBy) {
             if (Math.abs(px - plate.x) < plate.width/2 + 0.1 && Math.abs(py - plate.y) < plate.height/2 + 0.1) {
                 plate.grabbedBy = agentId;
                 grabbedAnything = true;
+                playSfx('grab');
+            }
+        }
+        if (!grabbedAnything && prism && !prism.grabbedBy) {
+            if (Math.abs(px - prism.x) < prism.width/2 + 0.1 && Math.abs(py - prism.y) < prism.height/2 + 0.1) {
+                prism.grabbedBy = agentId;
+                grabbedAnything = true;
+                playSfx('grab');
             }
         }
 
@@ -270,10 +675,26 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             ctx.stroke();
             drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
         }
+        if (prism && prism.grabbedBy === agentId) {
+            prism.x += (px - prism.x) * 0.15;
+            prism.y += (py - prism.y) * 0.15;
+            
+            ctx.beginPath();
+            ctx.moveTo(px * canvasWidth, py * canvasHeight);
+            ctx.lineTo(prism.x * canvasWidth, prism.y * canvasHeight);
+            ctx.strokeStyle = agentColor;
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+        }
     } else {
         if (man.grabbedBy === agentId) man.grabbedBy = null;
         if (lever.grabbedBy === agentId) lever.grabbedBy = null;
         if (plate && plate.grabbedBy === agentId) plate.grabbedBy = null;
+        if (prism && prism.grabbedBy === agentId) prism.grabbedBy = null;
+        if (wasHolding) {
+            playSfx('drop');
+        }
     }
 }
 
@@ -310,8 +731,12 @@ export function drawTutorial(ctx: CanvasRenderingContext2D, canvasWidth: number,
 }
 
 export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null) {
+    const wasHolding = tutorialBox.grabbedBy === 'live';
     if (!handLandmarks) {
         tutorialBox.grabbedBy = null;
+        if (wasHolding) {
+            playSfx('drop');
+        }
         return;
     }
     const pinch = isPinching(handLandmarks);
@@ -322,6 +747,7 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
         if (!tutorialBox.grabbedBy) {
             if (Math.sqrt(Math.pow(px - tutorialBox.x, 2) + Math.pow(py - tutorialBox.y, 2)) < 0.15) {
                 tutorialBox.grabbedBy = 'live';
+                playSfx('grab');
             }
         }
         
@@ -338,6 +764,9 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
         }
     } else {
         tutorialBox.grabbedBy = null;
+        if (wasHolding) {
+            playSfx('drop');
+        }
     }
 }
 
@@ -358,15 +787,21 @@ export function evaluateRules() {
         else if (plate.y > floor_y) plate.y = floor_y;
     }
 
+    if (prism && !prism.grabbedBy) {
+        if (prism.y < floor_y) prism.y = Math.min(floor_y, prism.y + 0.02);
+        else if (prism.y > floor_y) prism.y = floor_y;
+    }
+
     // Lever logic
     if (lever.x >= 0) {
         if (!lever.grabbedBy && lever.handleY > lever.y) {
             lever.handleY = Math.max(lever.y, lever.handleY - 0.02);
         }
-        lever.active = lever.handleY >= lever.y + 0.18; 
-        door.open = lever.active;
-    } else {
-        door.open = true;
+        const wasActive = lever.active;
+        lever.active = lever.handleY >= lever.y + 0.18;
+        if (!wasActive && lever.active) {
+            playSfx('switch');
+        }
     }
     
     // Laser logic
@@ -390,32 +825,121 @@ export function evaluateRules() {
 
         laser.height = 1.0 - laser.y; // Default goes to bottom
         
+        // Deflection by Shield (Plate)
         if (plate) {
-            // Intersects on X?
             if (plate.x - plate.width/2 < laser.x + laser.width/2 && 
                 plate.x + plate.width/2 > laser.x - laser.width/2) {
-                // Plate is below laser source
                 if (plate.y > laser.y) {
                     laser.height = Math.max(0, (plate.y - plate.height/2) - laser.y);
+                    spawnSparks(laser.x, plate.y - plate.height/2, 2, '#38bdf8');
                 }
             }
         }
-        
-        if (laser.active) {
-            const hitW = 0.05; 
-            const hitH = 0.1; 
-            if (Math.abs(man.x - laser.x) < laser.width/2 + hitW) {
-                if (man.y > laser.y && man.y - hitH < laser.y + laser.height) {
-                    if (gameState.mode === 'PLAYING') {
-                        // Man dies -> reset position
-                        const lvl = LEVELS[Math.min(gameState.currentLevel - 1, LEVELS.length - 1)];
-                        man.x = lvl.man.x;
-                        man.y = lvl.man.y;
-                        if (man.grabbedBy) man.grabbedBy = null;
+
+        // Deflection by Prism
+        let hitPrism = false;
+        if (prism && laser.active) {
+            if (Math.abs(laser.x - prism.x) < prism.width / 2 && prism.y > laser.y) {
+                hitPrism = true;
+                laser.height = Math.max(0, prism.y - laser.y);
+                spawnSparks(laser.x, prism.y, 3, '#38bdf8');
+
+                reflectedLaser.active = true;
+                reflectedLaser.startX = prism.x;
+                reflectedLaser.startY = prism.y;
+
+                if (prism.direction === 'left') {
+                    let beamEndX = 0;
+                    if (crystal) {
+                        const hoverOffset = Math.sin(Date.now() * 0.003) * 0.012;
+                        const crystalEffectiveY = (crystal.baseY ?? crystal.y) + hoverOffset;
+                        if (Math.abs(prism.y - crystalEffectiveY) < crystal.height / 2) {
+                            beamEndX = crystal.x + crystal.width / 2;
+                            spawnChargeMotes(crystal.x, crystalEffectiveY, 2);
+                            if (!crystal.charged) {
+                                playSfx('crystal_charge');
+                            }
+                            const wasCharged = crystal.charged;
+                            crystal.charge = Math.min(1.0, crystal.charge + 0.008);
+                            if (crystal.charge >= 1.0) {
+                                crystal.charged = true;
+                                if (!wasCharged) {
+                                    playSfx('crystal_ready');
+                                }
+                            }
+                        } else {
+                            if (!crystal.charged) {
+                                crystal.charge = Math.max(0, crystal.charge - 0.002);
+                            }
+                        }
                     }
+                    reflectedLaser.endX = beamEndX;
+                    reflectedLaser.endY = prism.y;
+                } else {
+                    let beamEndX = 1.0;
+                    if (crystal && crystal.x > prism.x) {
+                        const hoverOffset = Math.sin(Date.now() * 0.003) * 0.012;
+                        const crystalEffectiveY = (crystal.baseY ?? crystal.y) + hoverOffset;
+                        if (Math.abs(prism.y - crystalEffectiveY) < crystal.height / 2) {
+                            beamEndX = crystal.x - crystal.width / 2;
+                            spawnChargeMotes(crystal.x, crystalEffectiveY, 2);
+                            if (!crystal.charged) {
+                                playSfx('crystal_charge');
+                            }
+                            const wasCharged = crystal.charged;
+                            crystal.charge = Math.min(1.0, crystal.charge + 0.008);
+                            if (crystal.charge >= 1.0) {
+                                crystal.charged = true;
+                                if (!wasCharged) {
+                                    playSfx('crystal_ready');
+                                }
+                            }
+                        } else {
+                            if (!crystal.charged) {
+                                crystal.charge = Math.max(0, crystal.charge - 0.002);
+                            }
+                        }
+                    }
+                    reflectedLaser.endX = beamEndX;
+                    reflectedLaser.endY = prism.y;
                 }
             }
         }
+
+        if (!hitPrism) {
+            reflectedLaser.active = false;
+            if (crystal && !crystal.charged) {
+                crystal.charge = Math.max(0, crystal.charge - 0.002);
+            }
+        }
+    }
+
+    // Door unlocking logic: requires lever (if present) AND crystal charged (if present)
+    door.open = (lever.x < 0 || lever.active) && (!crystal || crystal.charged);
+
+    // Hazard collision & Death mechanics
+    let manHitByLaser = false;
+    if (laser && laser.active) {
+        const hitW = 0.05; 
+        const hitH = 0.1; 
+        if (Math.abs(man.x - laser.x) < laser.width/2 + hitW) {
+            if (man.y > laser.y && man.y - hitH < laser.y + laser.height) {
+                manHitByLaser = true;
+            }
+        }
+    }
+    if (reflectedLaser.active) {
+        const minX = Math.min(reflectedLaser.startX, reflectedLaser.endX);
+        const maxX = Math.max(reflectedLaser.startX, reflectedLaser.endX);
+        if (man.x >= minX - 0.04 && man.x <= maxX + 0.04) {
+            if (Math.abs(man.y - reflectedLaser.startY) < 0.07) {
+                manHitByLaser = true;
+            }
+        }
+    }
+
+    if (manHitByLaser) {
+        triggerManDeath();
     }
 
     // Win condition
@@ -424,6 +948,7 @@ export function evaluateRules() {
             if (gameState.mode === 'PLAYING') {
                 gameState.mode = 'WON';
                 gameState.baseInstruction = "🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!";
+                playSfx('win');
             }
         }
     }

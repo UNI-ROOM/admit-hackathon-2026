@@ -50,6 +50,28 @@ export interface Laser {
     speed?: number;
 }
 
+export interface Crystal extends Entity {
+    width: number;
+    height: number;
+    charge: number;      // 0.0 to 1.0
+    charged: boolean;    // true when charge >= 1.0
+    baseY?: number;
+}
+
+export interface Prism extends Entity {
+    width: number;
+    height: number;
+    direction: 'left' | 'right';
+}
+
+export interface ReflectedLaser {
+    active: boolean;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+}
+
 export interface GameState {
     mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON';
     tutorialStep: number;

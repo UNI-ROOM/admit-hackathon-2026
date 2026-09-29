@@ -4,10 +4,12 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { 
-    gameState, laser, plate, man, lever, door,
+    gameState, laser, plate, crystal, prism, man, lever, door,
     resetLevel, evaluateRules, handleDragAndDrop, getAgentColor, getAgentName
 } from '../src/game';
 import { LEVELS } from '../src/levels';
+import { playSfx, unlockAudioContext } from '../src/audio';
+
 
 test('Build check: npm run build succeeds cleanly', () => {
     try {
@@ -260,3 +262,77 @@ test('UI dropdown exists in HTML and is populated in main.ts with Tutorial and L
     assert.match(mainCode, /LEVELS\.forEach\(/, 'main.ts should iterate over LEVELS to append options');
     assert.match(mainCode, /levelSwitcher\.addEventListener\('change'/, 'main.ts should handle levelSwitcher change event');
 });
+
+test('Level 4 configuration: title, crystal, prism with direction left, door, and laser', () => {
+    const lvl4 = LEVELS.find(l => l.id === 4);
+    assert.ok(lvl4, 'Level 4 must be defined in LEVELS');
+    assert.strictEqual(lvl4.title, 'Уровень 4: Призма и Кристалл', 'Level 4 title should match');
+
+    // Crystal
+    assert.ok(lvl4.crystal, 'Level 4 must have a crystal config');
+    assert.strictEqual(typeof lvl4.crystal.x, 'number');
+    assert.strictEqual(typeof lvl4.crystal.y, 'number');
+    assert.strictEqual(typeof lvl4.crystal.width, 'number');
+    assert.strictEqual(typeof lvl4.crystal.height, 'number');
+
+    // Prism
+    assert.ok(lvl4.prism, 'Level 4 must have a prism config');
+    assert.strictEqual(typeof lvl4.prism.x, 'number');
+    assert.strictEqual(typeof lvl4.prism.y, 'number');
+    assert.strictEqual(typeof lvl4.prism.width, 'number');
+    assert.strictEqual(typeof lvl4.prism.height, 'number');
+    assert.strictEqual(lvl4.prism.direction, 'left', 'Level 4 prism direction must be left');
+
+    // Door
+    assert.ok(lvl4.door, 'Level 4 must have a door config');
+    assert.strictEqual(typeof lvl4.door.x, 'number');
+    assert.strictEqual(typeof lvl4.door.y, 'number');
+    assert.strictEqual(typeof lvl4.door.width, 'number');
+    assert.strictEqual(typeof lvl4.door.height, 'number');
+
+    // Laser
+    assert.ok(lvl4.laser, 'Level 4 must have a laser config');
+    assert.strictEqual(lvl4.laser.active, true, 'Level 4 laser must be active');
+    assert.strictEqual(typeof lvl4.laser.x, 'number');
+    assert.strictEqual(typeof lvl4.laser.y, 'number');
+    assert.strictEqual(typeof lvl4.laser.width, 'number');
+    assert.strictEqual(typeof lvl4.laser.height, 'number');
+
+    // Runtime state checks
+    gameState.currentLevel = 4;
+    resetLevel();
+    assert.ok(crystal, 'Runtime crystal should be initialized on Level 4');
+    assert.strictEqual(crystal.x, lvl4.crystal.x);
+    assert.strictEqual(crystal.y, lvl4.crystal.y);
+    assert.strictEqual(crystal.charge, 0);
+    assert.strictEqual(crystal.charged, false);
+
+    assert.ok(prism, 'Runtime prism should be initialized on Level 4');
+    assert.strictEqual(prism.x, lvl4.prism.x);
+    assert.strictEqual(prism.y, lvl4.prism.y);
+    assert.strictEqual(prism.direction, 'left');
+
+    assert.ok(laser, 'Runtime laser should be initialized on Level 4');
+    assert.strictEqual(laser.active, true);
+
+    assert.ok(door, 'Runtime door should be initialized on Level 4');
+    assert.strictEqual(door.open, false);
+});
+
+test('Procedural audio export: playSfx and unlockAudioContext in src/audio.ts', () => {
+    assert.strictEqual(typeof playSfx, 'function', 'playSfx must be exported as a function');
+    assert.strictEqual(typeof unlockAudioContext, 'function', 'unlockAudioContext must be exported as a function');
+
+    // Test calling safely in headless / node environment without errors
+    assert.doesNotThrow(() => {
+        unlockAudioContext();
+    }, 'unlockAudioContext should execute safely');
+
+    const sfxList = ['grab', 'drop', 'burn', 'crystal_charge', 'crystal_ready', 'switch', 'win'] as const;
+    for (const sfx of sfxList) {
+        assert.doesNotThrow(() => {
+            playSfx(sfx);
+        }, `playSfx('${sfx}') should execute without throwing`);
+    }
+});
+

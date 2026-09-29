@@ -15,6 +15,8 @@ export interface LevelConfig {
         speed?: number;
     };
     plate?: { x: number, y: number, width: number, height: number };
+    crystal?: { x: number, y: number, width: number, height: number };
+    prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
     maxEchoes?: number;
 }
 
@@ -45,5 +47,15 @@ export const LEVELS: LevelConfig[] = [
         laser: { x: 0.5, y: 0.0, width: 0.02, height: 1.0, active: true, minX: 0.38, maxX: 0.62, speed: 1.2 },
         plate: { x: 0.65, y: 0.3, width: 0.18, height: 0.05 },
         maxEchoes: 2
+    },
+    {
+        id: 4,
+        title: "Уровень 4: Призма и Кристалл",
+        man: { x: 0.85, y: 0.8 },
+        door: { x: 0.15, y: 0.8, width: 0.15, height: 0.15 },
+        laser: { x: 0.5, y: 0.0, width: 0.02, height: 1.0, active: true },
+        prism: { x: 0.7, y: 0.45, width: 0.09, height: 0.09, direction: 'left' },
+        crystal: { x: 0.2, y: 0.45, width: 0.08, height: 0.1 },
+        maxEchoes: 1
     }
 ];
