@@ -1,12 +1,59 @@
 body { margin: 0; background-color: #050510; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
 #game-container { position: relative; width: 100vw; height: 100vh; background: radial-gradient(circle at center, #1a1a2e 0%, #050510 100%); }
 #webcam { display: none; }
-#game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 10; }
+#game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; }
+#game-canvas.mirrored { transform: scaleX(-1); }
 #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem; box-sizing: border-box; }
 .status-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 12px; backdrop-filter: blur(5px); text-align: center; transition: all 0.3s ease; pointer-events: auto; }
-#level-switcher { pointer-events: auto; cursor: pointer; }
+.hud-menu-btn { margin-top: 10px; pointer-events: auto; cursor: pointer; background: #1e293b; color: white; border: 1px solid #64748b; border-radius: 8px; padding: 6px 14px; font: 14px system-ui; }
 .recording { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
 .playing { border-color: #06b6d4; box-shadow: 0 0 20px rgba(6, 182, 212, 0.5); }
+
+/* --- Menu / Level Select scenes ------------------------------------------------ */
+:root { --font-pixel: 'Press Start 2P', monospace; }
+
+.scene {
+    position: fixed; inset: 0; z-index: 5;
+    background-color: #000;
+    background-image:
+        linear-gradient(#161622 1px, transparent 1px),
+        linear-gradient(90deg, #161622 1px, transparent 1px);
+    background-size: 64px 64px;
+    color: white;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+.scene[hidden] { display: none !important; }
+
+.menu-scene {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem; gap: 2rem;
+}
+.menu-badge { position: absolute; top: 24px; left: 24px; text-align: center; max-width: 130px; }
+.menu-badge img { width: 96px; height: 96px; object-fit: contain; border-radius: 12px; }
+.menu-badge p { font: 11px system-ui; color: #94a3b8; margin: 6px 0 0; }
+
+.menu-title-wrap { text-align: center; }
+.menu-title { font-family: var(--font-pixel); font-size: clamp(2rem, 6vw, 3.5rem); margin: 0; letter-spacing: 4px; background: linear-gradient(90deg, #a855f7, #ec4899); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.menu-subtitle { font-family: var(--font-pixel); font-size: clamp(1rem, 3vw, 1.5rem); margin: 12px 0 0; letter-spacing: 3px; color: #67e8f9; }
+.menu-tagline { font: 14px system-ui; color: #94a3b8; margin: 14px 0 0; }
+
+.menu-buttons { display: flex; flex-direction: column; gap: 12px; width: min(360px, 90vw); }
+.menu-btn, .level-card button { font: 15px system-ui; letter-spacing: 1px; padding: 14px 18px; border-radius: 10px; border: 1px solid #64748b; background: #101525; color: white; cursor: pointer; pointer-events: auto; transition: background 0.15s ease, border-color 0.15s ease; }
+.menu-btn:hover, .level-card button:hover { background: #1e293b; border-color: #67e8f9; }
+
+.menu-status { position: absolute; bottom: 20px; left: 0; right: 0; text-align: center; font: 12px system-ui; color: #94a3b8; }
+
+.levels-scene { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; }
+.levels-heading { font-family: var(--font-pixel); font-size: clamp(1.2rem, 3vw, 1.8rem); letter-spacing: 3px; color: #67e8f9; margin: 0; }
+.levels-grid { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; }
+.level-card { width: 220px; background: rgba(16,21,37,0.9); border: 1px solid #334155; border-radius: 16px; padding: 20px; text-align: center; position: relative; display: flex; flex-direction: column; gap: 10px; }
+.level-card.locked { opacity: 0.55; }
+.level-card-num { font-family: var(--font-pixel); font-size: 1.4rem; color: #a855f7; }
+.level-card-name { font-weight: 700; font-size: 1.05rem; }
+.level-card-echoes, .level-card-best { font: 13px system-ui; color: #94a3b8; }
+.level-card-lock { font-size: 1.6rem; }
+.levels-nav { display: flex; gap: 16px; }
 
 /* Tutorial Animation */
 @keyframes brief-scoop-path {
@@ -70,3 +117,9 @@ body { margin: 0; background-color: #050510; color: white; overflow: hidden; fon
 .dwell-cursor { position:fixed; z-index:1000; pointer-events:none; width:24px; height:24px; transform:translate(-50%,-50%); border:3px solid #67e8f9; border-radius:50%; }
 #mode-indicator { align-self:flex-start; padding:12px 24px; }
 .account-hud { top:104px; }
+
+.settings-panel .row { display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid #334155; }
+.settings-panel select { color:white; background:#1e293b; border:1px solid #64748b; padding:8px; border-radius:8px; }
+.settings-panel button.is-on,.account-panel button[aria-pressed="true"] { background:#0ea5e9; border-color:#0ea5e9; }
+.settings-panel h2 { color:#67e8f9; }
+.settings-panel p { color:#fbbf24; font-size:14px; }

@@ -251,25 +251,34 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
     assert.doesNotMatch(gameCode, /const\s+LANES\s*=/, 'Game should not define discrete lanes');
 });
 
-test('UI dropdown exists in HTML and is populated in main.ts with Tutorial and Levels 1, 2, 3', () => {
+test('Menu-driven navigation: index.html has scene containers and no legacy level-switcher select', () => {
     const htmlPath = path.resolve(process.cwd(), 'index.html');
     const html = fs.readFileSync(htmlPath, 'utf8');
-    assert.match(html, /<select[^>]*id="level-switcher"[^>]*>/, 'index.html must have select#level-switcher');
+    assert.match(html, /<section[^>]*id="scene-menu"[^>]*>/, 'index.html must have section#scene-menu');
+    assert.match(html, /<section[^>]*id="scene-levels"[^>]*>/, 'index.html must have section#scene-levels');
+    assert.match(html, /<button[^>]*id="hud-menu-button"[^>]*>/, 'index.html must have the ☰ MENU HUD button');
+    assert.doesNotMatch(html, /id="level-switcher"/, 'index.html must not have the old level-switcher select anymore');
 
-    const mainPath = path.resolve(process.cwd(), 'src/main.ts');
-    const mainCode = fs.readFileSync(mainPath, 'utf8');
-    assert.match(mainCode, /levelSwitcher\.appendChild\(tutOption\)/, 'main.ts should append Tutorial option');
-    assert.match(mainCode, /LEVELS\.forEach\(/, 'main.ts should iterate over LEVELS to append options');
-    assert.match(mainCode, /levelSwitcher\.addEventListener\('change'/, 'main.ts should handle levelSwitcher change event');
+    const mainCode = fs.readFileSync(path.resolve(process.cwd(), 'src/main.ts'), 'utf8');
+    assert.doesNotMatch(mainCode, /levelSwitcher/, 'main.ts should no longer reference levelSwitcher');
+
+    const levelsScenePath = path.resolve(process.cwd(), 'src/scenes/levels.ts');
+    const levelsSceneCode = fs.readFileSync(levelsScenePath, 'utf8');
+    assert.match(levelsSceneCode, /LEVELS\.forEach\(/, 'scenes/levels.ts should iterate over LEVELS to build cards');
+    assert.match(levelsSceneCode, /export function goToLevel/, 'scenes/levels.ts should export goToLevel');
 });
 
-test('Tutorial step 4 wires the 4th gesture (index finger pointing) into the level menu', () => {
-    const mainPath = path.resolve(process.cwd(), 'src/main.ts');
-    const mainCode = fs.readFileSync(mainPath, 'utf8');
-    assert.match(mainCode, /isPointing/, 'main.ts should import and use isPointing gesture');
-    assert.match(mainCode, /tutorial\.step4\.instruction/, 'main.ts should have the 4/4 tutorial step instruction');
-    assert.match(mainCode, /pointingStabilizer/, 'main.ts should debounce the pointing gesture with StateStabilizer');
-    assert.match(mainCode, /LEVELS\.map\(/, 'main.ts should build level HUD buttons from LEVELS');
+test('Tutorial step 4 retargets to the ☰ MENU button (pause panel) instead of the removed level select', () => {
+    const mainCode = fs.readFileSync(path.resolve(process.cwd(), 'src/main.ts'), 'utf8');
+    assert.match(mainCode, /tutorial\.step4\.instruction/, 'main.ts should set the 4/4 tutorial step instruction when the fist-reset gesture is held');
+
+    const i18nCode = fs.readFileSync(path.resolve(process.cwd(), 'src/i18n.ts'), 'utf8');
+    assert.match(i18nCode, /MENU button/, 'tutorial.step4.instruction copy should reference the MENU button, not the removed level select');
+
+    const pausePath = path.resolve(process.cwd(), 'src/scenes/pause.ts');
+    const pauseCode = fs.readFileSync(pausePath, 'utf8');
+    assert.match(pauseCode, /tutorialStep === 4/, 'scenes/pause.ts should special-case tutorial step 4 when the MENU button is activated');
+    assert.match(pauseCode, /saveProgress\(\{\s*tutorialDone:\s*true\s*\}\)/, 'scenes/pause.ts should mark the tutorial done on step 4');
 
     const utilsPath = path.resolve(process.cwd(), 'src/utils.ts');
     const utilsCode = fs.readFileSync(utilsPath, 'utf8');

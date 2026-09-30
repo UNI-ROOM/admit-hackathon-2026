@@ -35,12 +35,34 @@ function auth(){
 }
 function editNickname(){open(t('account.nicknameTitle'));const form=document.createElement('form');const input=document.createElement('input');input.minLength=2;input.maxLength=16;input.required=true;input.value=session?.user.nickname||'';const submit=document.createElement('button');submit.type='submit';submit.textContent=t('account.save');const feedback=document.createElement('p');form.append(input,submit,feedback);panel.append(form);form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;try{session=await api.nickname(input.value);online=true;render();panel.close();}catch(err){feedback.textContent=errorText(err);}finally{submit.disabled=false;}};}
 async function fillBoard(container:HTMLElement){try{const rows=await api.leaderboard();const table=document.createElement('table');const head=table.createTHead().insertRow();for(const text of [t('account.tableHash'),t('account.tablePlayer'),t('account.tableScore'),t('account.tableLevels')]){const th=document.createElement('th');th.textContent=text;head.append(th);}const body=table.createTBody();rows.forEach((r,i)=>{const row=body.insertRow();if(r.isMe)row.className='is-me';for(const value of [i+1,r.nickname,r.total,r.levels])row.insertCell().textContent=String(value);});container.append(table);if(!rows.length){const p=document.createElement('p');p.textContent=t('account.noResults');container.append(p);}}catch{const p=document.createElement('p');p.textContent=t('account.leaderboardUnavailable');container.append(p);}}
-async function board(){open(t('account.top10'));const container=document.createElement('div');panel.append(container);await fillBoard(container);}
+async function board(){open(t('account.top10'));const container=document.createElement('div');panel.append(container);await fillBoard(container);await appendYouRank(container);}
+async function appendYouRank(container:HTMLElement){try{const r=await api.rank();const p=document.createElement('p');p.textContent=r.rank?t('board.you',{rank:r.rank,total:r.total}):t('board.youNoRank');container.append(p);}catch{/* offline: skip */}}
 export async function initializeAccount(){try{session=await api.session();online=true;render();return session;}catch{offline();return null;}}
+export async function refreshSession(){try{session=await api.session();online=true;}catch{offline();}render();return session;}
 export async function saveProgress(p:{maxLevel?:number;tutorialDone?:boolean}){try{await api.progress(p);}catch{offline();}}
-export async function showResult(p:RunPayload,next:()=>void){
+export function openProfile(){
+ open(t('profile.title'));
+ const total=session?Object.values(session.best).reduce((a,b)=>a+b,0):0;
+ message(session?session.user.email||t('profile.guest'):t('profile.guest'));
+ message(t('profile.totalPoints',{total}));
+ for(let n=1;n<=LEVEL_ECHOES.length;n++){const best=session?.best[String(n)];message(`${t('profile.level',{n})}: ${best?t('profile.best',{score:best}):t('profile.noBest')}`);}
+ const rankMsg=message(t('profile.noRank'));
+ void (async()=>{try{const r=await api.rank();rankMsg.textContent=r.rank?t('profile.rank',{rank:r.rank,players:r.players}):t('profile.noRank');}catch{/* offline: keep default */}})();
+ panel.append(login,nickname,logout,button(t('profile.close'),()=>panel.close()));
+}
+export function openLeaderboard(){void board();}
+export async function showResult(p:RunPayload,next:()=>void,replay?:()=>void){
  const score=levelScore({...p,maxEchoes:LEVEL_ECHOES[p.levelId-1]});open(t('account.levelComplete',{score}));
- const summary=message(t('account.savingResult'));panel.append(button(t('account.next'),next));message(t('account.nextLevelIn'));const container=document.createElement('div');panel.append(container);
+ const summary=message(t('account.savingResult'));
+ let seconds=8;let timer:ReturnType<typeof setInterval>|null=null;
+ const countdown=message(t('result.nextIn',{s:seconds}));
+ const stopCountdown=()=>{if(timer){clearInterval(timer);timer=null;}};
+ const nextBtn=button(t('result.next'),()=>{stopCountdown();next();});
+ const replayBtn=button(t('result.replay'),()=>{stopCountdown();(replay||next)();});
+ const levelsBtn=button(t('result.levelSelect'),()=>{stopCountdown();panel.close();void import('../scenes/router').then(m=>m.show('levels'));});
+ panel.append(nextBtn,replayBtn,levelsBtn);
+ timer=setInterval(()=>{seconds-=1;if(seconds<=0){stopCountdown();next();return;}countdown.textContent=t('result.nextIn',{s:seconds});},1000);
+ const container=document.createElement('div');panel.append(container);
  try{if(!session)session=await api.session();const r=await api.run(p);summary.textContent=t('account.bestRank',{best:r.best,rank:r.rank});session=await api.me();online=true;render();}catch{summary.textContent=t('account.offlineNotSaved');offline();}
  await fillBoard(container);
 }
