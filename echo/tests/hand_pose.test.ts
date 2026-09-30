@@ -6,7 +6,7 @@ import {
     type HandPose, type HandBasis
 } from '../src/three/hand-pose';
 import { Workshop, buildRobot } from '../src/three/models';
-import { Level3DRules, PRISM_START, TARGET, emptyInput } from '../src/three/rules';
+import { Level3DRules, PRISM_START, TARGET, UPPER_TARGET, emptyInput } from '../src/three/rules';
 import type { HandLandmarks } from '../src/hands';
 
 const basis: HandBasis = { up: { x: 0, y: 1, z: 0 }, towardCamera: { x: 0, y: 0, z: 1 } };
@@ -243,15 +243,22 @@ test('robot instances remain finite for missing, invalid and zero-length joints 
 
 test('recording, replay and released Save preserve immutable articulated finger poses', () => {
     const rules = new Level3DRules('hard'), captured = pointerHandPose(-1, true), expected = copyHandPose(captured)!;
+    rules.hands[0] = { ...PRISM_START, active: true, pinch: true };
+    rules.step(.02);
+    for (const position of [TARGET, { x: 2.2, z: 1.3 }, { x: 2.2, z: -.25 }, UPPER_TARGET]) {
+        rules.hands[0] = { ...position, active: true, pinch: true };
+        for (let frame = 0; frame < 160; frame++) rules.step(.02);
+    }
+    assert.equal(rules.upperHeld, true);
     rules.beginRecording();
-    rules.hands[0] = { ...PRISM_START, active: true, pinch: true, pose: captured };
+    rules.hands[0] = { ...UPPER_TARGET, active: true, pinch: true, pose: captured };
     rules.step(.02);
     samePose(rules.frames[0].hands[0].pose!, expected);
     captured[20].x += 1;
     samePose(rules.frames[0].hands[0].pose!, expected);
-    rules.hands[0] = { ...TARGET, active: true, pinch: true, pose: copyHandPose(expected) };
+    rules.hands[0] = { ...UPPER_TARGET, active: true, pinch: true, pose: copyHandPose(expected) };
     for (let frame = 0; frame < 40; frame++) rules.step(.02);
-    rules.hands[0] = emptyInput(TARGET.x, TARGET.z);
+    rules.hands[0] = emptyInput(UPPER_TARGET.x, UPPER_TARGET.z);
     rules.step(.02);
     assert.equal(rules.finishRecording(), true);
     const final = rules.frames[rules.frames.length - 1];
@@ -272,7 +279,6 @@ test('petting centers the palm over the crown and keeps every joint above the he
     const crown = { x: 3.05, y: 1.4, z: 1.55 };
     for (const side of [-1, 1] as const) {
         const pose = pointerHandPose(side, false);
-        // Exercise a depth-tilted tracked pose as well as the mouse fallback.
         for (const points of [pose, pose.map(p => ({ ...p, y: p.y + p.z * .3 }))]) {
             const before = JSON.stringify(points);
             const origin = pettingHandOrigin(points, crown);

@@ -4,8 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
-// Run real browser interactions against Vite. The camera adapter is mocked:
-// CI has no physical webcam, but uses the same callback and two-hand bridge.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const artifacts = new URL('../test-artifacts/', import.meta.url);
 await mkdir(artifacts, { recursive: true });
@@ -23,6 +21,7 @@ try {
         body: JSON.stringify({ user: { id: 'browser-test', nickname: 'Tester', isGuest: true }, progress: { max_level: 3, tutorial_done: 1 }, best: {} })
     }));
     await context.addInitScript(() => {
+        localStorage.setItem('vencera.guest', '1');
         window.__handOptions = [];
         window.Hands = class {
             setOptions(options) { window.__handOptions.push(options); }
@@ -30,6 +29,7 @@ try {
             async send() {}
         };
         window.Camera = class { async start() {} };
+        window.drawConnectors = () => {}; window.drawLandmarks = () => {};
     });
     const page = await context.newPage();
     const errors = [];
@@ -37,6 +37,7 @@ try {
     const requested = [];
     page.on('request', request => requested.push(request.url()));
     await page.goto(`http://127.0.0.1:${address.port}`, { waitUntil: 'networkidle' });
+    await page.locator('#scene-intro .intro-continue').click();
     await page.locator('#scene-menu .menu-btn--primary').click();
     await page.locator('#scene-modes:not([hidden])').waitFor();
     assert.match(await page.locator('.mode-card--2d').innerText(), /3 levels/);
@@ -70,148 +71,79 @@ try {
         await page.waitForTimeout(300);
         assert.equal(await page.evaluate(() => window.__handOptions.at(-1).maxNumHands), difficulty === 'easy' ? 1 : 2);
     };
-    for (const difficulty of ['easy', 'hard']) {
-        console.log(`Checking ${difficulty} gameplay and performance…`);
+    const snap = async name => page.screenshot({ path: fileURLToPath(new URL(name, artifacts)) });
+    const state = () => page.evaluate(() => ({ panda: { ...window.__echo3D.rules.panda }, prism: { ...window.__echo3D.rules.prism }, lower: window.__echo3D.rules.lowerPowered, lift: window.__echo3D.rules.liftHeight, bridge: window.__echo3D.rules.bridgeLocked }));
+    const pick = async name => {
+        if (name === 'prism') await page.waitForTimeout(600);
+        const p = (await state())[name]; await move(p.x, p.z, p.y + (name === 'panda' ? .85 : .55)); await page.mouse.down(); await page.waitForTimeout(150);
+        assert.equal(await page.evaluate(name => window.__echo3D.rules[name].owner, name), 0, `visible ${name} acquires grip`);
+    };
+    const carry = async (x, z, floorY, name) => { await move(x, z, floorY + (name === 'panda' ? .85 : .55)); await page.waitForTimeout(750); };
+    const release = async () => { await page.mouse.up(); await page.waitForTimeout(160); };
+    const waitSafe = async () => page.waitForFunction(() => window.__echo3D.rules.bridgeClock % (window.__echo3D.rules.difficulty === 'easy' ? 6 : 5.5) < .18, null, { timeout: 9000, polling: 'raf' });
+    const cameraOnly = process.env.ECHO_3D_CHECKS === 'camera';
+    for (const difficulty of (cameraOnly ? [] : ['easy', 'hard'])) {
+        console.log(`Checking ${difficulty} observatory route…`);
         await enter(difficulty);
         assert.equal(await page.evaluate(() => window.__echo3D.getMetrics().liveRobots), difficulty === 'easy' ? 1 : 2);
-        assert.match(await page.locator('.e3-mode').innerText(), difficulty === 'easy' ? /ONE HAND/ : /TWO HANDS/);
-        const dimensions = await page.locator('#scene-game3d canvas').boundingBox();
-        assert.ok(dimensions.width >= 1000 && dimensions.height >= 600, 'scene fills desktop viewport');
-        await page.screenshot({ path: fileURLToPath(new URL(`3d-${difficulty}.png`, artifacts)) });
-
-        await move(3.05, 1.55, 1.05);
-        await page.mouse.down(); await page.mouse.up();
-        await page.waitForTimeout(100);
-        assert.equal(await page.evaluate(() => window.__echo3D.getPandaAnimation().playful), true, 'a quick click greets the player even between animation frames');
-
-        // Check that pause suspends the actual simulation clock.
-        await action('pause').click();
-        const pausedAt = (await diagnostic()).elapsed;
-        const pausedPanda = await page.evaluate(() => window.__echo3D.getPandaAnimation());
-        await page.waitForTimeout(350);
-        assert.equal((await diagnostic()).elapsed, pausedAt);
-        assert.deepEqual(await page.evaluate(() => window.__echo3D.getPandaAnimation()), pausedPanda, 'panda freezes with the game');
+        await snap(`3d-${difficulty}.png`);
+        await pick('panda'); await release();
+        assert.equal(await page.evaluate(() => window.__echo3D.getPandaAnimation().playful), true);
+        await action('pause').click(); const pausedAt = (await diagnostic()).elapsed;
+        const frozen = await page.evaluate(() => window.__echo3D.getPandaAnimation()); await page.waitForTimeout(350);
+        assert.equal((await diagnostic()).elapsed, pausedAt); assert.deepEqual(await page.evaluate(() => window.__echo3D.getPandaAnimation()), frozen);
         await action('resume').click();
-        report.checks.push(`${difficulty}: pause freezes and resumes simulation`);
-
-        // Select the visible meshes above the floor, as an actual player does.
-        // The pickup offset must keep objects in place, then follow the drag.
-        if (difficulty === 'easy') await page.keyboard.press('2'); // unavailable hand cannot be selected
-        await move(2.15, -.65, .6);
-        await page.mouse.down();
-        await page.waitForTimeout(150);
-        assert.equal((await diagnostic()).owner, 0, 'visible prism surface is picked');
-        assert.ok(await page.locator('.e3-status-left').innerText().then(text => text.includes('HOLDING PRISM')));
-        await move(0, -.75, .6);
-        await page.mouse.up();
-        await page.waitForFunction(() => window.__echo3D.rules.doorOpen && window.__echo3D.rules.aligned, null, { timeout: 8000 });
-        assert.equal((await diagnostic()).echoReady, false, 'live completion requires no echo');
-        await move(3.05, 1.55, 1.05);
-        await page.mouse.down();
-        await page.waitForTimeout(180);
-        assert.equal(await page.evaluate(() => window.__echo3D.rules.panda.owner), 0, 'panda head acquires a grip');
-        assert.match(await page.evaluate(() => window.__echo3D.getPandaAnimation().mood), /pickup|carry/);
-        const pandaBeforeTurn = await page.evaluate(() => ({ ...window.__echo3D.rules.panda }));
-        await page.mouse.wheel(0, 120);
-        await page.waitForTimeout(120);
-        const wheelAngle = await page.evaluate(() => window.__echo3D.getPandaAnimation().rotation);
-        assert.ok(wheelAngle > .3, 'scroll turns the held panda');
-        assert.ok(await page.evaluate(() => window.__echo3D.getPandaAnimation().facing) > .2, 'the visible model actually rotates');
-        await page.keyboard.down('e'); await page.waitForTimeout(200); await page.keyboard.up('e');
-        assert.ok(await page.evaluate(() => window.__echo3D.getPandaAnimation().rotation) > wheelAngle + .2, 'E turns the held panda');
-        assert.deepEqual(await page.evaluate(() => ({ ...window.__echo3D.rules.panda })), pandaBeforeTurn, 'rotation preserves position and grip');
-        report.checks.push(`${difficulty}: wheel and keyboard rotate the panda without moving or releasing it`);
-        assert.match(await page.locator('.e3-grip-feedback[data-hand="0"]').innerText(), /HOLDING PANDA/);
-        await page.screenshot({ path: fileURLToPath(new URL(`3d-${difficulty}-grip.png`, artifacts)) });
-        await move(-3.15, 1.55, 1.05);
-        await page.mouse.up();
-        await page.waitForFunction(() => window.__echo3D.rules.won, null, { timeout: 3000 });
-        assert.equal((await diagnostic()).mistakes, 0);
-        assert.equal(await page.evaluate(() => window.__echo3D.getPandaAnimation().mood), 'victory');
-        await page.waitForTimeout(1250);
-        await page.screenshot({ path: fileURLToPath(new URL(`3d-${difficulty}-panda-victory.png`, artifacts)) });
-        assert.equal(await page.locator('.e3-overlay').getAttribute('data-victory'), 'true');
-        report.checks.push(`${difficulty}: panda pickup, pause and visible victory dance react to real gameplay`);
-        report.checks.push(`${difficulty}: visible prism and panda mesh picking, grip feedback and no-echo completion`);
-        await action('again').click();
-
-        // Move the real mouse rather than teleporting game objects through tests.
+        report.checks.push(`${difficulty}: pause freezes simulation and panda animation`);
+        await pick('panda'); await carry(2.2, 1.9, 0, 'panda'); await release();
+        await pick('prism'); await carry(.45, 1.3, 0, 'prism'); await release();
+        await page.waitForFunction(() => window.__echo3D.rules.lowerPowered, null, { timeout: 6000 });
+        await snap(`3d-${difficulty}-workshop.png`);
+        await pick('prism'); await carry(2.2, 1.3, 0, 'prism'); await carry(2.2, -.25, .3, 'prism'); await carry(2.35, -.35, .3, 'prism'); await release();
         await action('record').click();
-        await move(2.15, -0.65);
-        await page.mouse.down();
-        await page.waitForTimeout(100);
-        await move(0, -0.75);
-        await page.waitForTimeout(900);
-        await page.mouse.up();
-        await page.waitForTimeout(100);
-        await action('save').click();
-        assert.equal((await diagnostic()).echoReady, true, 'recording creates a playable echo');
-        await page.waitForFunction(() => window.__echo3D.rules.doorOpen && window.__echo3D.rules.aligned, null, { timeout: 8000 });
-        await move(3.05, 1.55);
-        await page.mouse.down();
-        await page.waitForTimeout(100);
-        await move(-3.15, 1.55);
-        await page.mouse.up();
-        await page.waitForFunction(() => window.__echo3D.rules.won, null, { timeout: 3000 });
-        assert.equal((await diagnostic()).mistakes, 0);
-        report.checks.push(`${difficulty}: record → release prism → save button → echo → charge → rescue → victory`);
+        await pick('prism'); await carry(2.35, -.35, .3, 'prism'); await page.waitForTimeout(800); await release();
+        await action('save').click(); assert.equal((await diagnostic()).echoReady, true);
+        await page.waitForFunction(() => window.__echo3D.rules.upperHeld, null, { timeout: 6000 });
+        await snap(`3d-${difficulty}-echo.png`);
+        report.checks.push(`${difficulty}: visible prism follows the ramp and release-before-save preserves an echo at the spring socket`);
+        await pick('panda');
+        await page.mouse.wheel(0, 120); await page.keyboard.down('e'); await page.waitForTimeout(180); await page.keyboard.up('e');
+        assert.ok(await page.evaluate(() => window.__echo3D.getPandaAnimation().rotation) > .5);
+        await carry(2.2, -.7, .3, 'panda'); await carry(3.6, -.7, .3, 'panda'); await carry(3.6, -1.65, .3, 'panda'); await release();
+        assert.equal((await state()).panda.surface, 'lift');
+        await action('lift').click(); await page.waitForTimeout(950); await snap(`3d-${difficulty}-lift.png`);
+        await page.waitForFunction(() => window.__echo3D.rules.liftHeight >= 1.8, null, { timeout: 5000 });
+        await pick('panda'); await carry(2.2, -1.65, 1.8, 'panda'); await release();
+        assert.equal((await state()).panda.surface, 'gallery');
+        await action('bridge').click(); await page.waitForFunction(() => window.__echo3D.rules.bridgeLocked);
+        await snap(`3d-${difficulty}-bridge.png`);
+        await page.waitForFunction(() => window.__echo3D.rules.laserActive);
+        await pick('panda'); await carry(-1.1, -1.65, 2.03, 'panda'); await release();
+        assert.equal((await diagnostic()).mistakes, 1); assert.equal((await state()).panda.surface, 'gallery');
+        assert.equal((await diagnostic()).echoReady, true); assert.equal((await state()).bridge, true);
+        await pick('panda'); await waitSafe();
+        const destination = await projected(-3.45, -1.6, 2.95); await page.mouse.move(destination.x, destination.y, { steps: 20 });
+        await page.waitForFunction(() => window.__echo3D.rules.won, null, { timeout: 3500 }); await release();
+        await page.waitForTimeout(1250); await snap(`3d-${difficulty}-panda-victory.png`);
+        assert.equal(await page.evaluate(() => window.__echo3D.getPandaAnimation().mood), 'victory');
+        assert.equal(await page.locator('.e3-overlay').getAttribute('data-victory'), 'true');
+        report.checks.push(`${difficulty}: full mouse route, lift, locked bridge, laser checkpoint recovery and visible victory`);
         await action('again').click();
-        assert.equal((await diagnostic()).echoReady, false);
-        assert.equal((await diagnostic()).won, false);
-
-        // Synthetic landmarks enter via main.ts's existing MediaPipe callback.
-        // Simple accepts one physical hand; Hard keeps both identities.
-        await page.evaluate(() => {
-            const hand = x => Array.from({ length: 21 }, () => ({ x, y: .5, z: 0 }));
-            const left = hand(.3), right = hand(.7);
-            left[8].x += .1; right[8].x += .1;
-            window.__emitHands({ multiHandLandmarks: [left, right],
-                multiHandedness: [{ label: 'Left', score: .99 }, { label: 'Right', score: .99 }] });
-        });
-        await page.waitForTimeout(100);
-        assert.equal((await diagnostic()).hands.filter(hand => hand.active).length, difficulty === 'easy' ? 1 : 2);
-        if (difficulty === 'easy') {
-            await page.evaluate(() => {
-                const hand = Array.from({ length: 21 }, () => ({ x: .7, y: .5, z: 0 }));
-                hand[8].x += .1;
-                window.__emitHands({ multiHandLandmarks: [hand], multiHandedness: [{ label: 'Right', score: .99 }] });
-            });
-            await page.waitForTimeout(100);
-            assert.equal((await diagnostic()).hands[0].active, true, 'either physical hand drives the single robot');
-            assert.equal((await diagnostic()).hands[1].active, false);
-        }
-        await page.evaluate(() => window.__emitHands({}));
-        await page.waitForTimeout(600);
-        assert.equal((await diagnostic()).hands.filter(hand => hand.active).length, 0);
-        report.checks.push(`${difficulty}: correct robot count, keyboard hand selection, camera hand limit and lost-tracking release`);
-
+        assert.equal((await state()).lower, false); assert.equal((await state()).lift, .3); assert.equal((await state()).bridge, false);
+        await page.keyboard.press('2'); await page.keyboard.down('a'); await page.waitForTimeout(150); await page.keyboard.up('a');
+        assert.equal((await diagnostic()).hands[difficulty === 'easy' ? 0 : 1].active, true);
+        await action('restart').click();
         const timing = await page.evaluate(async () => {
-            const samples = [];
-            let previous = performance.now();
-            await new Promise(resolve => {
-                const sample = now => {
-                    samples.push(now - previous); previous = now;
-                    if (samples.length >= 180) resolve(); else requestAnimationFrame(sample);
-                };
-                requestAnimationFrame(sample);
-            });
-            samples.shift(); samples.sort((a, b) => a - b);
-            const meanMs = samples.reduce((a, b) => a + b, 0) / samples.length;
+            const samples = []; let previous = performance.now();
+            await new Promise(resolve => { const sample = now => { samples.push(now - previous); previous = now; if (samples.length >= 180) resolve(); else requestAnimationFrame(sample); }; requestAnimationFrame(sample); });
+            samples.shift(); samples.sort((a, b) => a - b); const meanMs = samples.reduce((a, b) => a + b, 0) / samples.length;
             return { meanMs, fps: 1000 / meanMs, p95Ms: samples[Math.floor(samples.length * .95)], metrics: window.__echo3D.getMetrics() };
         });
-        report.performance[difficulty] = timing;
-        console.log(`${difficulty}: ${timing.fps.toFixed(1)} FPS; p95 ${timing.p95Ms.toFixed(1)} ms; ${JSON.stringify(timing.metrics)}`);
-        // Generous CI ceiling: measured results are reported, rather than claiming
-        // every machine must reproduce the developer laptop's refresh rate.
-        assert.ok(timing.meanMs < 50, `frame time regression: ${timing.meanMs.toFixed(1)} ms`);
-        await action('exit').click();
-        await page.locator('#scene-modes:not([hidden])').waitFor();
-        assert.equal(await page.locator('#scene-game3d canvas').count(), 0, 'exit removes the renderer');
-        assert.equal(await page.evaluate(() => !!window.__echo3D), false, 'dispose removes diagnostic and active session');
+        report.performance[difficulty] = timing; assert.ok(timing.meanMs < 50, `frame regression: ${timing.meanMs}`);
+        await action('exit').click(); assert.equal(await page.locator('#scene-game3d canvas').count(), 0);
+        assert.equal(await page.evaluate(() => !!window.__echo3D), false);
     }
 
-    // Finger movement and wrist rotation must reach the visible model, beyond
-    // the binary pinch gesture. Use an anatomical open hand with a fixed index tip.
+    if (!cameraOnly) {
     await enter('easy');
     await page.evaluate(async () => {
         const { pointerHandPose } = await import('/src/three/hand-pose.ts');
@@ -224,8 +156,6 @@ try {
     });
     await page.waitForTimeout(450);
     const handPose = () => page.evaluate(() => window.__echo3D.getHandPoses()[0].pose);
-    // Compare the final rendered joints to the preview, not an assumed palm
-    // normal. A roll can pass a normal test while still reversing every finger.
     const checkCameraOutline = async () => {
         const result = await page.evaluate(async () => {
             const { getSettings } = await import('/src/settings.ts');
@@ -253,7 +183,7 @@ try {
     const verticalSpan = Math.max(...opened.map(p => p.y)) - Math.min(...opened.map(p => p.y));
     const surfaceSpan = Math.max(...opened.map(p => p.z)) - Math.min(...opened.map(p => p.z));
     assert.ok(verticalSpan < surfaceSpan * .25, 'open palm lies along the tabletop rather than standing upright');
-    assert.equal(await page.evaluate(() => window.__echo3D.getHandPoses()[0].position.y), .68);
+    assert.ok(await page.evaluate(() => Math.abs(window.__echo3D.getHandPoses()[0].position.y - (window.__echo3D.rules.hands[0].y ?? 0) - .68) < .001));
     await checkCameraOutline();
     report.checks.push('All 21 rendered joints match the camera preview without a second reflection; hand remains along the tabletop at a fixed height');
     await page.screenshot({ path: fileURLToPath(new URL('3d-hand-open.png', artifacts)) });
@@ -271,7 +201,6 @@ try {
     assert.ok(jointDistance(opened[20], curled[20]) < .015, 'pinky does not curl with the middle finger');
     assert.ok(jointDistance(opened[8], curled[8]) < .001, 'interaction tip stays anchored');
     await page.screenshot({ path: fileURLToPath(new URL('3d-hand-finger.png', artifacts)) });
-    // Fold index/thumb without moving the palm: grip must not move the whole hand.
     const beforePinch = await page.evaluate(() => ({
         hand: { ...window.__echo3D.rules.hands[0] }, robot: window.__echo3D.getHandPoses()[0]
     }));
@@ -340,44 +269,106 @@ try {
     await action('exit').click();
     report.checks.push('Anatomical camera hand follows independent fingers, depth and wrist rotation; Simple keeps one robot');
 
-    // A second walkthrough uses only synthetic camera landmarks via the real
-    // MediaPipe callback, including mirrored coordinates and smoothing.
+    }
+
     await enter('hard');
-    await action('record').click();
-    await page.evaluate(() => {
-        window.__testHandPoints = [{ x: 2.15, z: -.65, y: .6, pinch: true }, null];
+    const installCamera = () => page.evaluate(() => {
+        window.__testHandPoints = [null, null];
         window.__testHandTimer = setInterval(() => {
             const landmarks = window.__testHandPoints.map(point => {
                 if (!point) return null;
-                const screen = window.__echo3D.project(point.x, point.z, point.y);
+                const screen = point.screen ? { x: point.x, y: point.y } : window.__echo3D.project(point.x, point.z, point.y);
                 const x = 1 - screen.x / innerWidth, y = screen.y / innerHeight;
                 const hand = Array.from({ length: 21 }, () => ({ x, y: y + .1, z: 0 }));
                 hand[0].y = y + .16; hand[9].y = y + .08;
-                hand[8] = { x, y, z: 0 };
-                hand[4] = { x: x + (point.pinch ? .005 : .12), y, z: 0 };
+                hand[8] = { x, y, z: 0 }; hand[4] = { x: x + (point.pinch ? .005 : .12), y, z: 0 };
                 return hand;
             });
-            window.__emitHands({ multiHandLandmarks: landmarks.filter(Boolean),
-                multiHandedness: landmarks.flatMap((hand, index) => hand ? [{ label: index ? 'Right' : 'Left', score: .99 }] : []) });
-        }, 80);
+            window.__emitHands({ multiHandLandmarks: landmarks.filter(Boolean), multiHandedness: landmarks.flatMap((hand, index) => hand ? [{ label: index ? 'Right' : 'Left', score: .99 }] : []) });
+        }, 65);
     });
-    await page.waitForTimeout(250);
-    assert.equal((await diagnostic()).owner, 0);
-    await page.evaluate(() => { window.__testHandPoints[0] = { x: 0, z: -.75, y: .6, pinch: true }; });
-    await page.waitForTimeout(1100);
-    await page.keyboard.press('Space');
-    assert.equal((await diagnostic()).echoReady, true);
-    await page.waitForFunction(() => window.__echo3D.rules.doorOpen && window.__echo3D.rules.aligned, null, { timeout: 8000 });
-    await page.evaluate(() => { window.__testHandPoints[1] = { x: 3.05, z: 1.55, y: 1.05, pinch: true }; });
-    await page.waitForTimeout(250);
+    await installCamera();
+    const cameraPoint = async (slot, point, delay = 1050) => {
+        await page.evaluate(({ slot, point }) => { window.__testHandPoints[slot] = point; }, { slot, point }); await page.waitForTimeout(delay);
+    };
+    const cameraButton = async (actionName, slot = 1) => {
+        const box = await action(actionName).boundingBox();
+        assert.ok(box, `${actionName} button is visible`);
+        const point = { screen: true, x: box.x + box.width / 2, y: box.y + box.height / 2, pinch: false };
+        await cameraPoint(slot, point, 300); await cameraPoint(slot, { ...point, pinch: true }, 250); await cameraPoint(slot, null, 420);
+    };
+    await cameraButton('pause', 0); const cameraPausedAt = (await diagnostic()).elapsed; await page.waitForTimeout(150);
+    assert.equal((await diagnostic()).elapsed, cameraPausedAt); await cameraButton('resume', 0);
+    console.log('Camera walkthrough: lower power');
+    await cameraPoint(0, { x: 1.55, z: 1.5, y: .55, pinch: true }); assert.equal((await diagnostic()).owner, 0);
+    await cameraPoint(0, { x: .45, z: 1.3, y: .55, pinch: true }, 2900);
+    await page.waitForFunction(() => window.__echo3D.rules.lowerPowered);
+    await cameraPoint(0, { x: 2.2, z: 1.3, y: .55, pinch: true });
+    await cameraPoint(0, { x: 2.2, z: -.25, y: .85, pinch: true });
+    await cameraPoint(0, { x: 2.35, z: -.35, y: .85, pinch: true });
+    assert.equal(await page.evaluate(() => window.__echo3D.rules.upperHeld), true);
+    console.log('Camera walkthrough: second hand and lift');
+    await cameraPoint(1, { x: 3.55, z: 2.05, y: .85, pinch: true });
     assert.equal(await page.evaluate(() => window.__echo3D.rules.panda.owner), 1);
-    await page.evaluate(() => { window.__testHandPoints[1] = { x: -3.15, z: 1.55, y: 1.05, pinch: true }; });
-    await page.waitForFunction(() => window.__echo3D.rules.won, null, { timeout: 5000 });
+    await cameraPoint(1, { x: 2.2, z: 1.9, y: .85, pinch: true });
+    await cameraPoint(1, { x: 2.2, z: -.7, y: 1.15, pinch: true });
+    await cameraPoint(1, { x: 3.6, z: -.7, y: 1.15, pinch: true });
+    await cameraPoint(1, { x: 3.6, z: -1.65, y: 1.15, pinch: true });
+    await cameraPoint(1, { x: 3.6, z: -1.65, y: 1.15, pinch: false }, 250);
+    assert.equal((await state()).panda.surface, 'lift'); await cameraButton('lift');
+    await page.waitForFunction(() => window.__echo3D.rules.liftHeight >= 1.8);
+    const upperPanda = (await state()).panda;
+    await cameraPoint(1, { x: upperPanda.x, z: upperPanda.z, y: 2.65, pinch: true });
+    assert.equal(await page.evaluate(() => window.__echo3D.rules.panda.owner), 1);
+    await cameraPoint(1, { x: 2.2, z: -1.65, y: 2.65, pinch: true });
+    await cameraPoint(1, { x: 2.2, z: -1.65, y: 2.65, pinch: false }, 250);
+    console.log('Camera walkthrough: bridge and exit');
+    assert.equal((await state()).panda.surface, 'gallery'); await cameraButton('bridge');
+    await page.waitForFunction(() => window.__echo3D.rules.bridgeLocked);
+    await cameraPoint(1, { x: 2.2, z: -1.65, y: 2.65, pinch: true }, 300);
+    await waitSafe(); await cameraPoint(1, { x: -3.45, z: -1.6, y: 2.95, pinch: true }, 1700);
+    await page.waitForFunction(() => window.__echo3D.rules.won, null, { timeout: 3000 });
+    assert.equal((await diagnostic()).echoReady, false); assert.equal((await diagnostic()).mistakes, 0);
     await page.evaluate(() => { clearInterval(window.__testHandTimer); window.__emitHands({}); });
     await action('exit').click();
-    report.checks.push('Complete two-hand camera-landmark walkthrough passes through real callback, mirroring and smoothing');
+    report.checks.push('Complete Hard route with two synthetic camera hands, real callback, spring hold and camera-only UI buttons');
 
-    // Repeated entry + exit detects leaked canvases and stale mounted sessions.
+    await enter('easy'); await installCamera();
+    console.log('Simple camera walkthrough: spring memory');
+    await cameraPoint(0, { x: 1.55, z: 1.5, y: .55, pinch: true });
+    await cameraPoint(0, { x: .45, z: 1.3, y: .55, pinch: true }, 2600);
+    await page.waitForFunction(() => window.__echo3D.rules.lowerPowered);
+    await cameraPoint(0, { x: 2.2, z: 1.3, y: .55, pinch: true });
+    await cameraPoint(0, { x: 2.2, z: -.25, y: .85, pinch: true });
+    await cameraPoint(0, { x: 2.35, z: -.35, y: .85, pinch: true });
+    await cameraButton('record', 0);
+    const parked = (await state()).prism;
+    await cameraPoint(0, { x: parked.x, z: parked.z, y: .85, pinch: true });
+    await cameraPoint(0, { x: 2.35, z: -.35, y: .85, pinch: true });
+    await cameraButton('save', 0);
+    assert.equal((await diagnostic()).echoReady, true);
+    await page.waitForFunction(() => window.__echo3D.rules.upperHeld, null, { timeout: 9000 });
+    await cameraPoint(0, { x: 3.55, z: 2.05, y: .85, pinch: true });
+    await cameraPoint(0, { x: 2.2, z: 1.9, y: .85, pinch: true });
+    await cameraPoint(0, { x: 2.2, z: -.7, y: 1.15, pinch: true });
+    await cameraPoint(0, { x: 3.6, z: -.7, y: 1.15, pinch: true });
+    await cameraPoint(0, { x: 3.6, z: -1.65, y: 1.15, pinch: true });
+    await cameraPoint(0, { x: 3.6, z: -1.65, y: 1.15, pinch: false }, 250);
+    await cameraButton('lift', 0); await page.waitForFunction(() => window.__echo3D.rules.liftHeight >= 1.8);
+    const simpleUpper = (await state()).panda;
+    await cameraPoint(0, { x: simpleUpper.x, z: simpleUpper.z, y: 2.65, pinch: true });
+    await cameraPoint(0, { x: 2.2, z: -1.65, y: 2.65, pinch: true });
+    await cameraPoint(0, { x: 2.2, z: -1.65, y: 2.65, pinch: false }, 250);
+    await cameraButton('bridge', 0); await page.waitForFunction(() => window.__echo3D.rules.bridgeLocked);
+    await cameraPoint(0, { x: 2.2, z: -1.65, y: 2.65, pinch: true }, 300); await waitSafe();
+    await cameraPoint(0, { x: -3.45, z: -1.6, y: 2.95, pinch: true }, 1700);
+    await page.waitForFunction(() => window.__echo3D.rules.won, null, { timeout: 3000 });
+    assert.equal((await diagnostic()).mistakes, 0);
+    await page.evaluate(() => { clearInterval(window.__testHandTimer); window.__emitHands({}); });
+    await action('exit').click();
+    report.checks.push('Complete Simple camera route with one live hand, echo and camera-only Record / Save / Lift / Bridge controls');
+
+
     for (let attempt = 0; attempt < 3; attempt++) {
         await enter('easy');
         assert.equal(await page.locator('#scene-game3d canvas').count(), 1);
@@ -405,7 +396,6 @@ try {
     }
     report.checks.push('1024×768 and 390×844 viewport layouts fit without horizontal overflow');
 
-    // Real failure path: no injected MediaPipe globals, external CDN blocked.
     const offline = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     await offline.route(/^https:\/\//, route => route.abort());
     await offline.route('**/api/**', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"offline"}' }));
@@ -413,6 +403,8 @@ try {
     const offlineErrors = [];
     offlinePage.on('pageerror', error => { offlineErrors.push(error.message); console.error('Offline browser error:', error.stack); });
     await offlinePage.goto(`http://127.0.0.1:${address.port}`, { waitUntil: 'networkidle' });
+    await offlinePage.locator('#scene-intro .intro-continue').click();
+    await offlinePage.locator('.account-panel button').filter({ hasText: 'Play offline' }).click();
     await offlinePage.locator('#scene-menu .menu-btn--primary').click();
     await offlinePage.locator('.mode-card--3d').click();
     await offlinePage.locator('.mode-difficulty').filter({ hasText: 'Simple' }).click();
@@ -429,6 +421,7 @@ try {
     await writeFile(new URL('report.json', artifacts), JSON.stringify(report, null, 2) + '\n');
     console.log(JSON.stringify(report, null, 2));
 } finally {
+    await browser?.contexts()[0]?.pages()[0]?.screenshot({ path: fileURLToPath(new URL('3d-last-state.png', artifacts)) }).catch(() => {});
     await writeFile(new URL('report.json', artifacts), JSON.stringify(report, null, 2) + '\n');
     await browser?.close();
     await server.close();

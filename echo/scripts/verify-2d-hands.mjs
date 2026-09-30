@@ -85,6 +85,7 @@ try {
     await page.evaluate(async () => { (await import('/src/scenes/levels.ts')).goToLevel(1, 'easy'); });
     await page.waitForFunction(() => window.__echo2DHands?.());
     await page.evaluate(() => window.__emitHands({ multiHandLandmarks: window.__previewHands, multiHandedness: [{ label: 'Left', score: .99 }, { label: 'Right', score: .99 }] }));
+    await page.waitForFunction(() => window.__echo2DHands()?.hands === 1, null, { polling: 'raf', timeout: 3000 });
     assert.equal(await page.evaluate(() => window.__echo2DHands().hands), 1);
     checks.push('Exit disposes the WebGL layer; re-entry in Simple renders only one hand');
     assert.deepEqual(errors, []); checks.push('No uncaught browser errors');

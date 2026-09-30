@@ -1,11 +1,17 @@
 import * as THREE from 'three';
-import { Workshop, buildRoom, buildPanda, buildPrism, buildReceiver, buildDoor, buildRobot, buildBeam } from './models';
+import { Workshop, buildPanda, buildPrism, buildReceiver, buildDoor, buildRobot } from './models';
 import { Level3DRules, TARGET, PRISM_START, PANDA_START, DOOR, emptyInput, type Input3D, type Difficulty3D } from './rules';
 import type { HandLandmarks } from '../hands';
 import { getSettings } from '../settings';
 import { pointerHandPose, trackedHandPose, StableHandControl, tabletopHandBasis, pettingHandOrigin } from './hand-pose';
 import { PandaRotation } from './panda-rotation';
 import { playSfx } from '../audio';
+import { buildTerrain } from './terrain';
+import { buildMechanisms } from './mechanisms';
+import { surfaceHeight } from './surfaces';
+import { UPPER_TARGET, LIFT_CENTER, SURFACES } from './level-layout';
+import { t } from '../i18n';
+import { isPointing } from '../utils';
 import './style.css';
 import './feedback.css';
 
@@ -13,15 +19,17 @@ export interface MountOptions { onExit?: () => void; onCameraRequest?: () => voi
 
 export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, options: MountOptions = {}): { dispose(): void } {
     const host = document.createElement('section'); host.className = 'echo3d'; host.setAttribute('aria-label', 'ECHO 3D laboratory');
+    const text = (key: string) => t(`e3.${key}`);
     host.innerHTML = `
-    <div class="e3-top"><div><div class="e3-brand">ECHO / LABORATORY 01</div><h1 class="e3-title">The prism engine</h1><div class="e3-subtitle">Give your past self a hand. Bring the panda home.</div></div>
-    <div class="e3-actions"><span class="e3-mode">${difficulty === 'easy' ? 'SIMPLE · ONE HAND' : 'HARD · TWO HANDS'}</span><button data-action="restart" aria-label="Restart level">↻ Restart</button><button data-action="pause" aria-label="Pause game">Ⅱ Pause</button><button data-action="exit">Menu ↗</button></div></div>
-    <aside class="e3-side"><div class="e3-side-title">YOUR NEXT MOVE</div><div class="e3-task"></div><div class="e3-charge"><div class="e3-charge-fill"></div></div><div class="e3-charge-label"><span>CRYSTAL CHARGE</span><span class="e3-percent">0%</span></div><div class="e3-live-note">Echo is optional. Charge the crystal, then bring the panda to the gate.</div></aside>
-    <div class="e3-label" data-label="target">PRISM TARGET</div><div class="e3-label" data-label="prism">DRAG PRISM</div><div class="e3-label" data-label="panda">PANDA</div><div class="e3-label" data-label="exit">EXIT · LOCKED</div>
-    <div class="e3-bottom"><section class="e3-echo"><div class="e3-echo-head"><span>◌ ECHO MEMORY</span><span class="e3-record-status">NO MEMORY YET</span></div><div class="e3-timeline"><div class="e3-timeline-fill"></div></div><div class="e3-echo-buttons"><button class="primary" data-action="record">● Record echo</button><button class="record" data-action="save" disabled>Save echo · Space</button></div><div class="e3-controls">Drag objects with the mouse. <b>R</b> record · <b>Space</b> save.<br>${difficulty === 'hard' ? '<b>1 / 2</b> select a hand · ' : ''}<b>WASD / arrows</b> move · <b>F</b> grip.<br>Panda: <b>Q / E</b> or scroll to turn · open hand to pet · quick pinch / click to wave.</div></section>
-    <section class="e3-hands"><div class="e3-hands-title">${difficulty === 'easy' ? 'ROBOT OPERATOR' : 'ROBOT OPERATORS'}</div><div class="e3-hand-status"><span><i class="e3-hand-dot"></i>L <span class="e3-status-left">MOUSE</span></span><span ${difficulty === 'easy' ? 'hidden' : ''}><i class="e3-hand-dot right"></i>R <span class="e3-status-right">READY</span></span></div><button data-action="camera">Enable hand tracking</button><div class="e3-camera-preview" hidden><video muted autoplay playsinline></video><svg viewBox="0 0 160 100" aria-label="Tracked hands"></svg></div><p class="e3-camera-note">${difficulty === 'easy' ? 'One hand' : 'Two hands'}. Pinch thumb + index to grab.</p></section></div>
+    <div class="e3-top"><div><div class="e3-brand">${text('brand')}</div><h1 class="e3-title">${text('title')}</h1><div class="e3-subtitle">${text('subtitle')}</div></div>
+    <div class="e3-actions"><span class="e3-mode">${difficulty === 'easy' ? 'SIMPLE · ONE HAND' : 'HARD · TWO HANDS'}</span><button data-action="restart">${text('restart')}</button><button data-action="pause">${text('pause')}</button><button data-action="exit">${text('menu')}</button></div></div>
+    <aside class="e3-side"><div class="e3-side-title">${text('next')}</div><div class="e3-task"></div><div class="e3-charge"><div class="e3-charge-fill"></div></div><div class="e3-charge-label"><span>${text('chargeLabel')}</span><span class="e3-percent">0%</span></div><div class="e3-live-note">${text(difficulty === 'easy' ? 'noteEasy' : 'noteHard')}</div><div class="e3-power-state"></div><button data-action="lift" hidden>${text('liftButton')}</button><button data-action="bridge" hidden>${text('bridgeButton')}</button></aside>
+    <div class="e3-label" data-label="target">${text('socketI')}</div><div class="e3-label" data-label="prism">${text('prism')}</div><div class="e3-label" data-label="panda">${text('panda')}</div><div class="e3-label" data-label="exit">${text('exitLocked')}</div>
+    <div class="e3-label" data-label="upper">${text('socketII')}</div><div class="e3-label zone" data-label="lift">${text('liftLabel')}</div><div class="e3-label zone" data-label="gallery">${text('gallery')}</div>
+    <div class="e3-bottom"><section class="e3-echo"><div class="e3-echo-head"><span>◌ ${text('memory')}</span><span class="e3-record-status">${text('noMemory')}</span></div><div class="e3-timeline"><div class="e3-timeline-fill"></div></div><div class="e3-echo-buttons"><button class="primary" data-action="record">${text('record')}</button><button class="record" data-action="save" disabled>${text('save')}</button></div><div class="e3-controls">${text('controls')}</div></section>
+    <section class="e3-hands"><div class="e3-hands-title">${difficulty === 'easy' ? 'ROBOT OPERATOR' : 'ROBOT OPERATORS'}</div><div class="e3-hand-status"><span><i class="e3-hand-dot"></i>L <span class="e3-status-left">${text('mouseKeys')}</span></span><span ${difficulty === 'easy' ? 'hidden' : ''}><i class="e3-hand-dot right"></i>R <span class="e3-status-right">${text('ready')}</span></span></div><button data-action="camera">${text('camera')}</button><div class="e3-camera-preview" hidden><video muted autoplay playsinline></video><svg viewBox="0 0 160 100" aria-label="Tracked hands"></svg></div><p class="e3-camera-note">${text('cameraNote')}</p></section></div>
     <div class="e3-grip-feedback" data-hand="0" hidden></div><div class="e3-grip-feedback" data-hand="1" hidden></div>
-    <div class="e3-toast" hidden></div><div class="e3-overlay" hidden><div class="e3-dialog"><div class="e3-dialog-icon">ECHO LAB / 01</div><h2></h2><p></p><div class="e3-dialog-actions"><button class="primary" data-action="resume">Resume</button><button data-action="again">Restart</button><button data-action="exit">Menu ↗</button></div></div></div>`;
+    <div class="e3-toast" hidden></div><div class="e3-overlay" hidden><div class="e3-dialog"><div class="e3-dialog-icon">ECHO / OBSERVATORY</div><h2></h2><p></p><div class="e3-dialog-actions"><button class="primary" data-action="resume">${text('resume')}</button><button data-action="again">${text('restart')}</button><button data-action="exit">${text('menu')}</button></div></div></div>`;
     container.replaceChildren(host);
     const w = new Workshop();
     const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance' });
@@ -38,12 +46,14 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     light.shadow.bias = -0.001; light.shadow.normalBias = 0.03; w.scene.add(light);
     const rimLight = new THREE.DirectionalLight('#a7acff', 1.3); rimLight.position.set(5, 5, -7); w.scene.add(rimLight);
     const camera = new THREE.OrthographicCamera(-7, 7, 5, -5, 0.1, 100);
-    camera.position.set(0, 9.8, 12.6); camera.lookAt(0, 0.25, 0);
-    buildRoom(w);
+    camera.position.set(0, 10.8, 14.6); camera.lookAt(0, 1.3, 0);
+    const terrain = buildTerrain(w);
+    const mechanisms = buildMechanisms(w);
     const panda = buildPanda(w), prism = buildPrism(w), receiver = buildReceiver(w), door = buildDoor(w);
+    receiver.root.position.set(-.05, 0, .93);
+    door.root.position.set(DOOR.x, DOOR.y, DOOR.z);
     const robots = [buildRobot(w, '#769bff', false, -1), buildRobot(w, '#ff876a', false, 1), buildRobot(w, '#c8a0ff', true, -1), buildRobot(w, '#c8a0ff', true, 1)];
     for (const robot of robots) {
-        // Mouse poses use this local basis; camera poses account for it once.
         robot.root.rotation.x = Math.PI;
         robot.root.traverse(object => { if (object instanceof THREE.Mesh) object.castShadow = false; });
     }
@@ -51,10 +61,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         const angle = robot.side * .7, cos = Math.cos(angle), sin = Math.sin(angle);
         return { x: point.x * cos + point.z * sin, y: -point.y, z: point.z * cos - point.x * sin };
     })));
-    // The projected robot must have the same finger directions as the preview.
-    // Do not roll the palm afterwards: that introduces a second reflection.
     const handBasis = tabletopHandBasis(Math.asin(-camera.getWorldDirection(new THREE.Vector3()).y));
-    const beam = buildBeam(w, '#ff704d'), reflection = buildBeam(w, '#76c7ff');
     const prismHalo = w.ring(prism.root, 0.43, [0, 0.16, 0], '#8c9eff', 0.035);
     const gripHalos = [panda.ring, prismHalo];
     for (const halo of gripHalos) { halo.material = halo.material.clone(); w.resources.add(halo.material as THREE.Material); }
@@ -65,9 +72,11 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     const cameraHands: [Input3D, Input3D] = [emptyInput(), emptyInput()];
     const pandaRotation = new PandaRotation();
     const cameraControls = [new StableHandControl(), new StableHandControl()];
+    const uiDwell: { button: HTMLButtonElement | null; since: number; clicked: boolean }[] = [{ button: null, since: 0, clicked: false }, { button: null, since: 0, clicked: false }];
     const pointerOffsets: ({ x: number; z: number } | null)[] = [null, null];
     const cameraOffsets: ({ x: number; z: number } | null)[] = [null, null];
     let cameraAt = -Infinity, cameraPoseKey = '', selected = 0, paused = false, disposed = false, raf = 0, last = performance.now(), time = 0;
+    let previousLaserWarning = false;
     let previousDoor = false, previousWin = false, previousMistakes = 0, previousOwner: number | null = null;
     let victoryAt = -1;
     let frames = 0, fpsSum = 0, width = 1, height = 1, hudAt = 0;
@@ -77,11 +86,11 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     let pandaPress: { x: number; y: number; time: number } | null = null;
     const keys = new Set<string>(), cleanups: (() => void)[] = [];
     const raycaster = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.14), hit = new THREE.Vector3();
-    const vector = new THREE.Vector3(), beamFrom = new THREE.Vector3(0, 0.48, -2.24), beamEnd = new THREE.Vector3(), reflectFrom = new THREE.Vector3(), reflectEnd = new THREE.Vector3(-2.95, 0.48, -0.75);
+    const vector = new THREE.Vector3();
     const query = <T extends HTMLElement = HTMLElement>(selector: string) => host.querySelector<T>(selector)!;
     const task = query('.e3-task'), chargeFill = query('.e3-charge-fill'), percent = query('.e3-percent'), recordStatus = query('.e3-record-status'), timeline = query('.e3-timeline-fill');
     const save = query<HTMLButtonElement>('[data-action="save"]'), record = query<HTMLButtonElement>('[data-action="record"]'), toast = query('.e3-toast'), overlay = query('.e3-overlay');
-    const labels = ['target', 'prism', 'panda', 'exit'].map(name => query(`[data-label="${name}"]`));
+    const labels = ['target', 'prism', 'panda', 'exit', 'upper', 'lift', 'gallery'].map(name => query(`[data-label="${name}"]`));
     const leftStatus = query('.e3-status-left'), rightStatus = query('.e3-status-right');
     const gripLabels = [query('[data-hand="0"]'), query('[data-hand="1"]')];
     const preview = query('.e3-camera-preview'), previewVideo = query<HTMLVideoElement>('.e3-camera-preview video');
@@ -99,18 +108,45 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         width = host.clientWidth || window.innerWidth; height = host.clientHeight || window.innerHeight;
         renderer.setSize(width, height, false);
         const aspect = width / height;
-        const halfWidth = Math.max(5.65, 3.25 * aspect), halfHeight = halfWidth / aspect;
+        const halfWidth = Math.max(6.9, 3.75 * aspect), halfHeight = halfWidth / aspect;
         camera.left = -halfWidth; camera.right = halfWidth; camera.top = halfHeight; camera.bottom = -halfHeight;
-        // Raise the diorama slightly to make room for the memory controls.
-        camera.setViewOffset(width, height, 0, height * 0.01, width, height); camera.updateProjectionMatrix();
+        camera.setViewOffset(width, height, 0, -height * .03, width, height); camera.updateProjectionMatrix();
         renderDirty = true;
     }
     const observer = new ResizeObserver(resize); observer.observe(host); resize();
-    function screenPoint(clientX: number, clientY: number): { x: number; z: number } {
+    function screenPoint(clientX: number, clientY: number, index = selected, source = pointerHands): Input3D {
         const rect = renderer.domElement.getBoundingClientRect();
         raycaster.setFromCamera(new THREE.Vector2((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1), camera);
-        if (!raycaster.ray.intersectPlane(plane, hit)) return { x: 0, z: 2.4 };
-        return { x: hit.x, z: hit.z };
+        const held = [rules.panda, rules.prism].find(o => o.owner === index);
+        if (held) {
+            const elevation = held === rules.panda ? .85 : .55;
+            let y = held.y;
+            for (let i = 0; i < 3; i++) {
+                plane.constant = -(y + elevation);
+                raycaster.ray.intersectPlane(plane, hit);
+                y = surfaceHeight(held.surface, { x: hit.x, z: hit.z }, rules.terrain);
+            }
+            return { x: hit.x, z: hit.z, y, surface: held.surface, pinch: source[index].pinch, active: true };
+        }
+        w.scene.updateMatrixWorld(true);
+        const surfaces = terrain.surfaceMeshes.filter(mesh => mesh.userData.surface !== 'bridge' || rules.bridgeLocked);
+        const intersections = raycaster.intersectObjects(surfaces, false);
+        if (intersections.length) {
+            const picked = intersections[0], surface = picked.object.userData.surface;
+            return { x: picked.point.x, z: picked.point.z, y: surfaceHeight(surface, { x: picked.point.x, z: picked.point.z }, rules.terrain), surface, pinch: source[index].pinch, active: true };
+        }
+        plane.constant = 0; raycaster.ray.intersectPlane(plane, hit);
+        return { x: hit.x, z: hit.z, y: 0, pinch: source[index].pinch, active: true };
+    }
+    function pickControl(clientX: number, clientY: number): string | null {
+        const rect = renderer.domElement.getBoundingClientRect();
+        raycaster.setFromCamera(new THREE.Vector2((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1), camera);
+        const hit = raycaster.intersectObjects(mechanisms.buttons.filter(button => button.parent?.visible), false)[0];
+        return hit?.object.userData.action || null;
+    }
+    function activate(action: string | null) {
+        if (action === 'lift') rules.activateLift();
+        if (action === 'bridge') rules.activateBridge();
     }
     function project(x: number, z: number, y = 0.14) {
         vector.set(x, y, z).project(camera);
@@ -128,10 +164,15 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
             if (object === panda.root) return rules.panda;
             if (object === prism.root) return rules.prism;
         }
-        return null;
+        const candidates = [rules.panda, rules.prism].map(o => {
+            const center = project(o.x, o.z, o.y + (o === rules.panda ? .85 : .55));
+            const edge = project(o.x + .43, o.z, o.y + .55);
+            return { o, distance: Math.hypot(center.x - clientX, center.y - clientY), radius: Math.abs(edge.x - center.x) };
+        }).filter(c => c.distance < c.radius).sort((a, b) => a.distance - b.distance);
+        return candidates[0]?.o || null;
     }
     function updatePointer(event: PointerEvent) {
-        const index = pointerSlot ?? selected, point = screenPoint(event.clientX, event.clientY), offset = pointerOffsets[index];
+        const index = pointerSlot ?? selected, point = screenPoint(event.clientX, event.clientY, index), offset = pointerOffsets[index];
         const hovered = !pointerHands[index].pinch ? pickObject(event.clientX, event.clientY) : null;
         Object.assign(pointerHands[index], offset ? { x: point.x + offset.x, z: point.z + offset.z } : hovered || point, { active: true });
     }
@@ -139,12 +180,18 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     listen(renderer.domElement, 'pointerleave', (() => { if (pointerSlot === null) pointerHands[selected].active = false; }) as EventListener);
     listen(renderer.domElement, 'pointerdown', ((event: PointerEvent) => {
         if (paused || rules.won) return;
-        renderer.domElement.focus(); pointerSlot = selected;
-        const floor = screenPoint(event.clientX, event.clientY), object = pickObject(event.clientX, event.clientY);
+        renderer.domElement.focus();
+        const control = pickControl(event.clientX, event.clientY);
+        if (control) { activate(control); return; }
+        pointerSlot = selected;
+        const object = pickObject(event.clientX, event.clientY);
+        if (object) { plane.constant = -(object.y + (object === rules.panda ? .85 : .55)); raycaster.ray.intersectPlane(plane, hit); }
+        const floor = object ? { x: hit.x, z: hit.z } : screenPoint(event.clientX, event.clientY);
         pandaPress = object === rules.panda ? { x: event.clientX, y: event.clientY, time: performance.now() } : null;
         pointerOffsets[selected] = object ? { x: object.x - floor.x, z: object.z - floor.z } : null;
-        updatePointer(event); pointerHands[selected].pinch = true;
-        // Acquire on pointerdown, before a fast pointermove can leave the object.
+        if (object) Object.assign(pointerHands[selected], object, { active: true });
+        else updatePointer(event);
+        pointerHands[selected].pinch = true;
         rules.hands[selected] = { ...pointerHands[selected] }; rules.step(0);
         renderer.domElement.setPointerCapture(event.pointerId);
     }) as EventListener);
@@ -163,13 +210,13 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     function setPaused(value: boolean) {
         paused = value; renderDirty = true; pointerSlot = null; pointerOffsets.fill(null); keys.clear(); pointerHands.forEach(hand => { hand.pinch = false; });
         if (rules.won) return;
-        overlay.hidden = !paused; query('.e3-dialog h2').textContent = 'Take a breath.';
+        overlay.hidden = !paused; query('.e3-dialog h2').textContent = text('pauseTitle');
         query('.e3-dialog-icon').textContent = 'ECHO LAB / 01';
-        query('.e3-dialog p').textContent = 'The laboratory is paused. Your echo and progress are waiting.';
+        query('.e3-dialog p').textContent = text('pauseNote');
         query('[data-action="resume"]').hidden = false;
     }
     function restart() { pettingBlend.fill(0); rules.reset(); panda.animator.reset(); pandaRotation.reset(); pandaPress = null; victoryAt = -1; delete overlay.dataset.victory; pointerSlot = null; pointerOffsets.fill(null); cameraOffsets.fill(null); cameraControls.forEach(control => control.reset()); pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); keys.clear(); paused = false; overlay.hidden = true; previousWin = previousDoor = false; previousMistakes = 0; }
-    function begin() { rules.beginRecording(); paused = false; overlay.hidden = true; previousWin = false; }
+    function begin() { rules.beginRecording(); pointerOffsets.fill(null); cameraOffsets.fill(null); pointerHands.forEach(hand => { hand.pinch = false; }); paused = false; overlay.hidden = true; previousWin = false; }
     function finish() { if (rules.finishRecording()) pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); }
     listen(window, 'keydown', ((event: KeyboardEvent) => {
         if (disposed || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -180,8 +227,13 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         if (paused || rules.won) return;
         if (key === 'r') begin();
         else if (key === ' ') finish();
+        else if (key === 'enter') activate(rules.canLift ? 'lift' : rules.canBridge ? 'bridge' : null);
         else if (key === '1' || (key === '2' && rules.handCount === 2)) selected = Number(key) - 1;
-        else if (key === 'f') { pointerHands[selected].active = true; pointerHands[selected].pinch = !pointerHands[selected].pinch; }
+        else if (key === 'f') {
+            const hand = pointerHands[selected]; hand.active = true; hand.pinch = !hand.pinch;
+            const near = [rules.panda, rules.prism].find(o => Math.hypot(o.x - hand.x, o.z - hand.z) < .5);
+            if (near) { hand.y = near.y; hand.surface = near.surface; }
+        }
         keys.add(key);
     }) as EventListener);
     listen(window, 'keyup', ((event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); }) as EventListener);
@@ -201,24 +253,43 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         for (let i = 0; i < 2; i++) {
             const hand = incoming[i];
             const pose = hand ? trackedHandPose(hand, getSettings().mirror, aspect, handBasis) : null;
-            if (!hand || !pose) { cameraHands[i].active = false; cameraHands[i].pinch = false; cameraHands[i].pose = undefined; cameraOffsets[i] = null; cameraControls[i].reset(); skeletonPaths[i].forEach(path => path.setAttribute('points', '')); continue; }
+            if (!hand || !pose) { uiDwell[i].button?.classList.remove('hand-hover'); uiDwell[i].button = null; cameraHands[i].active = false; cameraHands[i].pinch = false; cameraHands[i].pose = undefined; cameraOffsets[i] = null; cameraControls[i].reset(); skeletonPaths[i].forEach(path => path.setAttribute('points', '')); continue; }
             if (lostTracking) cameraControls[i].reset();
             const controlled = cameraControls[i].update(hand, pose);
             const point = controlled.point, tip = hand[8], thumb = hand[4], rect = renderer.domElement.getBoundingClientRect();
             const x = getSettings().mirror ? 1 - point.x : point.x;
             const clientX = rect.left + x * rect.width, clientY = rect.top + point.y * rect.height;
-            const mapped = screenPoint(clientX, clientY);
+            const mapped = screenPoint(clientX, clientY, i, cameraHands);
             const palmSize = Math.hypot(hand[0].x - hand[9].x, hand[0].y - hand[9].y);
             const ratio = Math.hypot(tip.x - thumb.x, tip.y - thumb.y) / Math.max(0.06, palmSize);
             const pinch = ratio < (cameraHands[i].pinch ? 0.62 : 0.44);
+            const button = document.elementFromPoint(clientX, clientY)?.closest('button');
+            const ui = uiDwell[i];
+            const target = button instanceof HTMLButtonElement && host.contains(button) && !button.disabled ? button : null;
+            if (target !== ui.button) { ui.button?.classList.remove('hand-hover'); ui.button = target; ui.since = performance.now(); ui.clicked = false; }
+            if (target) {
+                target.classList.add('hand-hover');
+                if (!ui.clicked && ((pinch && !cameraHands[i].pinch) || (isPointing(hand) && performance.now() - ui.since > 1000))) {
+                    ui.clicked = true; target.click();
+                    if (disposed) return;
+                }
+                cameraHands[i].active = false; cameraHands[i].pinch = pinch;
+                continue;
+            }
+            if (paused || rules.won) continue;
             if (!pinch) cameraOffsets[i] = null;
+            if (pinch && !cameraHands[i].pinch && ![rules.panda, rules.prism].some(o => o.owner === i)) activate(pickControl(clientX, clientY));
             const hovered = pickObject(clientX, clientY);
+            if (hovered && hovered.owner === null && pinch && !cameraOffsets[i]) {
+                plane.constant = -(hovered.y + (hovered === rules.panda ? .85 : .55));
+                raycaster.ray.intersectPlane(plane, hit); mapped.x = hit.x; mapped.z = hit.z;
+            }
             if (pinch && !cameraOffsets[i] && hovered && (hovered.owner === null || hovered.owner === i)) cameraOffsets[i] = { x: hovered.x - mapped.x, z: hovered.z - mapped.z };
             if (cameraOffsets[i]) { mapped.x += cameraOffsets[i]!.x; mapped.z += cameraOffsets[i]!.z; }
-            else if (!pinch && hovered) { mapped.x = hovered.x; mapped.z = hovered.z; }
+            else if (!pinch && hovered) { Object.assign(mapped, { x: hovered.x, z: hovered.z, y: hovered.y, surface: hovered.surface }); }
             if (!cameraHands[i].active) Object.assign(cameraHands[i], mapped);
             else { cameraHands[i].x += (mapped.x - cameraHands[i].x) * 0.45; cameraHands[i].z += (mapped.z - cameraHands[i].z) * 0.45; }
-            Object.assign(cameraHands[i], { active: true, pinch, pose: controlled.pose });
+            Object.assign(cameraHands[i], { active: true, pinch, y: hovered?.y ?? mapped.y, surface: mapped.surface, pose: controlled.pose });
             skeletonPaths[i].forEach((path, edge) => path.setAttribute('points', handEdges[edge].map(index => `${(getSettings().mirror ? 1 - hand[index].x : hand[index].x) * 160},${hand[index].y * 100}`).join(' ')));
         }
     }) as EventListener);
@@ -231,22 +302,21 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
             else if (action === 'resume') setPaused(false);
             else if (action === 'record') begin();
             else if (action === 'save') finish();
+            else if (action === 'lift' || action === 'bridge') activate(action);
             else if (action === 'camera') {
                 cameraState = 'requesting';
-                query('.e3-camera-note').textContent = difficulty === 'easy' ? 'Allow camera access. Keep one hand inside the frame.' : 'Allow camera access. Keep both hands inside the frame.';
+                query('.e3-camera-note').textContent = text('cameraAllow');
                 Promise.resolve(options.onCameraRequest?.()).then(result => {
                     if (disposed) return;
                     cameraState = result === false ? 'unavailable' : 'ready';
-                    if (result === false) query('.e3-camera-note').textContent = 'Camera unavailable. Mouse and keyboard remain ready.';
+                    if (result === false) query('.e3-camera-note').textContent = text('cameraUnavailable');
                 }).catch(() => {
                     if (disposed) return;
-                    cameraState = 'unavailable'; query('.e3-camera-note').textContent = 'Camera unavailable. Mouse and keyboard remain ready.';
+                    cameraState = 'unavailable'; query('.e3-camera-note').textContent = text('cameraUnavailable');
                 });
             }
         }) as EventListener);
     }
-    // Pointerdown captures a held mouse pose; click also supports keyboard and
-    // the existing dwell / gesture interface. Repeated finish is a no-op.
     listen(save, 'click', finish as EventListener);
     function label(element: HTMLElement, x: number, z: number, y = 0.15) {
         const p = project(x, z, y), rect = host.getBoundingClientRect();
@@ -254,27 +324,31 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     }
     function updateHud(now: number) {
         if (now - hudAt < 100) return; hudAt = now;
-        task.textContent = rules.won ? 'Panda is home. You did it together!' : rules.doorOpen && !rules.aligned ? 'Gate charged. Place the prism on the target to clear the laser path.'
-            : rules.doorOpen ? 'Gate open! Grab the panda and move it along the front to EXIT.'
-            : rules.aligned ? 'Prism aligned. Keep it here while the crystal charges.' : 'Grab the prism and place it on the glowing target.';
+        host.dataset.stage = rules.stage;
+        task.textContent = text(rules.stage);
         chargeFill.style.width = `${rules.charge * 100}%`; percent.textContent = `${Math.round(rules.charge * 100)}%`;
-        recordStatus.textContent = rules.recording ? `RECORDING ${rules.recordTime.toFixed(1)} / 8s` : rules.echoReady ? (rules.echoTime < rules.echoDuration ? 'MEMORY PLAYING' : 'HELPER HOLDING') : 'OPTIONAL HELPER';
+        recordStatus.textContent = rules.recording ? `REC ${rules.recordTime.toFixed(1)} / 8s` : rules.echoReady ? text(rules.echoTime < rules.echoDuration ? 'playing' : 'holding') : text('noMemory');
         timeline.style.width = `${rules.recording ? rules.recordTime / 8 * 100 : rules.echoReady ? Math.min(100, rules.echoTime / rules.echoDuration * 100) : 0}%`;
-        save.disabled = !rules.recording; record.textContent = rules.echoReady || rules.recording ? '● Record again' : '● Record helper';
-        toast.hidden = rules.messageTime <= 0; toast.textContent = rules.message;
+        save.disabled = !rules.canSave; record.disabled = !rules.lowerPowered || rules.won;
+        record.textContent = text(rules.echoReady || rules.recording ? 'recordAgain' : 'record');
+        query('[data-action="lift"]').hidden = !rules.canLift;
+        query('[data-action="bridge"]').hidden = !rules.canBridge;
+        query('.e3-power-state').textContent = !rules.lowerPowered ? '' : rules.bridgeLocked ? `${text(rules.laserActive ? 'laserOn' : rules.laserWarning ? 'laserWarn' : 'laserSafe')} · ${rules.laserRemaining.toFixed(1)}s` : text(rules.powered ? 'powerOn' : 'powerOff');
+        query('.e3-power-state').dataset.danger = String(rules.laserActive || rules.laserWarning);
+        toast.hidden = rules.messageTime <= 0; toast.textContent = t(rules.message);
         for (const [index, status] of [leftStatus, rightStatus].entries()) {
-            const held = rules.panda.owner === index ? 'PANDA' : rules.prism.owner === index ? 'PRISM' : '';
-            status.textContent = rules.won ? 'RESCUED' : held ? `HOLDING ${held}` : cameraHands[index].active && now - cameraAt < 350 ? (cameraHands[index].pinch ? 'PINCH' : 'OPEN HAND') : selected === index ? 'MOUSE / KEYS' : 'READY';
+            const held = rules.panda.owner === index ? text('panda') : rules.prism.owner === index ? text('prism') : '';
+            status.textContent = rules.won ? text('rescued') : held ? t('e3.holdingObject', { object: held }) : cameraHands[index].active && now - cameraAt < 350 ? text(cameraHands[index].pinch ? 'pinch' : 'openHand') : selected === index ? text('mouseKeys') : text('ready');
             status.dataset.holding = held ? 'true' : 'false';
             const hand = rules.hands[index];
             if (index >= rules.handCount) { gripLabels[index].hidden = true; continue; }
             const hovered = hand.active ? [rules.panda, rules.prism].find(object => Math.hypot(object.x - hand.x, object.z - hand.z) < 0.58 && object.owner === null) : null;
             const gripLabel = gripLabels[index];
             gripLabel.hidden = rules.won || !hand.active || (hand.pinch && !held && !hovered);
-            gripLabel.textContent = held ? `${index ? 'R' : 'L'} · HOLDING ${held}` : hovered ? `${index ? 'R' : 'L'} · PINCH TO GRAB ${hovered === rules.panda ? 'PANDA' : 'PRISM'}` : `${index ? 'R' : 'L'} · ${hand.pinch ? 'PINCH' : 'OPEN'}`;
+            gripLabel.textContent = `${index ? 'R' : 'L'} · ` + (held ? t('e3.holdingObject', { object: held }) : hovered ? t('e3.pinchObject', { object: text(hovered === rules.panda ? 'panda' : 'prism') }) : text(hand.pinch ? 'pinch' : 'openHand'));
             gripLabel.dataset.holding = held ? 'true' : 'false';
             const robot = robots[index], rect = host.getBoundingClientRect();
-            const anchor = project(hand.x, hand.z);
+            const anchor = project(hand.x, hand.z, hand.y ?? 0);
             let handTop = Infinity;
             for (const point of robot.getPose()) {
                 handTop = Math.min(handTop, project(robot.root.position.x + point.x, robot.root.position.z - point.z, robot.root.position.y - point.y).y);
@@ -288,12 +362,16 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
             previewVideo.style.transform = getSettings().mirror ? 'scaleX(-1)' : '';
             void previewVideo.play().catch(() => {});
         }
-        if (cameraState === 'ready') query('.e3-camera-note').textContent = cameraHands.some(hand => hand.active) && now - cameraAt < 350
-            ? difficulty === 'easy' ? 'Pinch thumb + index to grab with your hand.' : 'Pinch thumb + index. Blue is left, coral is right.' : 'Tracking is waiting for your hands. Mouse and keyboard are ready.';
-        labels[3].textContent = rules.doorOpen ? 'EXIT · OPEN' : 'EXIT · LOCKED';
-        labels[1].textContent = rules.echoReady ? 'ECHO PRISM' : rules.prism.owner !== null ? 'PRISM · HELD' : 'DRAG PRISM';
-        label(labels[0], TARGET.x, TARGET.z + 0.55); label(labels[1], rules.prism.x, rules.prism.z, 1.2);
-        labels[2].hidden = rules.won; label(labels[2], rules.panda.x, rules.panda.z, 1.55); label(labels[3], DOOR.x, DOOR.z, 2.0);
+        if (cameraState === 'ready') query('.e3-camera-note').textContent = text(cameraHands.some(hand => hand.active) && now - cameraAt < 350 ? 'cameraNote' : 'cameraWait');
+        labels[3].textContent = text(rules.doorOpen ? 'exitOpen' : 'exitLocked');
+        labels[1].textContent = (rules.echoReady ? 'ECHO · ' : '') + text('prism');
+        labels[0].hidden = rules.lowerPowered;
+        label(labels[0], TARGET.x, TARGET.z, .35); label(labels[1], rules.prism.x, rules.prism.z, rules.prism.y + 1.15);
+        labels[2].hidden = rules.won; label(labels[2], rules.panda.x, rules.panda.z, rules.panda.y + 1.65);
+        label(labels[3], DOOR.x, DOOR.z, DOOR.y + 2.0);
+        labels[4].hidden = !rules.lowerPowered || rules.bridgeLocked; label(labels[4], UPPER_TARGET.x, UPPER_TARGET.z, .48);
+        labels[5].hidden = rules.liftHeight > 1.79; label(labels[5], LIFT_CENTER.x, LIFT_CENTER.z, rules.liftHeight + .2);
+        labels[6].hidden = rules.liftHeight < 1.79 || rules.bridgeLocked; label(labels[6], 2.1, -1.6, 1.95);
     }
     function isPettingHand(hand: Input3D) {
         return !rules.won && rules.panda.owner === null && hand.active && !hand.pinch
@@ -313,7 +391,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
                 rules.hands = pointerHands.map((mouse, index) => cameraHands[index].active && now - cameraAt < 350 && !mouse.pinch ? { ...cameraHands[index] } : { ...mouse }) as [Input3D, Input3D];
                 rules.step(dt);
             }
-            panda.root.position.set(rules.panda.x, 0, rules.panda.z);
+            panda.root.position.set(rules.panda.x, rules.panda.y, rules.panda.z);
             const nearbyHand = rules.hands.find(hand => hand.active && Math.hypot(hand.x - rules.panda.x, hand.z - rules.panda.z) < 1.2);
             if (!paused && !rules.won) {
                 const owner = rules.panda.owner;
@@ -335,14 +413,13 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
                 const color = object.owner === 0 ? '#769bff' : object.owner === 1 ? '#ff876a' : object.owner !== null ? '#c8a0ff' : '#b69ad8';
                 material.color.set(color); material.emissive.set(color); material.emissiveIntensity = object.owner !== null ? 1.7 : hovered ? 1.1 : 0.4;
             }
-            prism.root.position.set(rules.prism.x, 0, rules.prism.z); prism.crystal.rotation.y = Math.PI / 2 + Math.sin(time) * 0.04;
+            prism.root.position.set(rules.prism.x, rules.prism.y, rules.prism.z); prism.crystal.rotation.y = Math.PI / 2 + Math.sin(time) * 0.04;
             receiver.crystal.rotation.y = time * 0.15; receiver.ring.visible = rules.charge > 0.05;
             receiver.crystal.scale.setScalar(0.9 + rules.charge * 0.2); receiver.crystal.scale.y *= 1.3;
             const receiverMat = receiver.crystal.material as THREE.MeshStandardMaterial; receiverMat.emissiveIntensity = 0.1 + rules.charge * 1.7;
             door.panels.forEach((panel, i) => { const side = i ? 1 : -1; panel.position.x += (side * (rules.doorOpen ? 0.72 : 0.29) - panel.position.x) * 0.12; });
             door.ring.visible = rules.doorOpen;
-            beamEnd.set(0, 0.48, rules.aligned ? rules.prism.z : 2.55); beam.set(beamFrom, beamEnd);
-            reflectFrom.set(0, 0.48, rules.prism.z); reflectEnd.z = rules.prism.z; reflection.set(reflectFrom, reflectEnd, rules.aligned);
+            terrain.update(rules, time); mechanisms.update(rules);
             pettingCrown.set(0, .43, 0);
             panda.head.localToWorld(pettingCrown);
             [...rules.hands, ...rules.ghosts].forEach((input, index) => {
@@ -351,6 +428,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
                 const x = input.active ? input.x : difficulty === 'easy' ? 0 : index % 2 ? 2.6 : -2.6, z = input.active ? input.z : 2.55;
                 const held = [rules.panda, rules.prism].find(object => object.owner === index);
                 const pose = input.pose || fallbackPoses[index][Number(input.pinch)];
+                const floorY = held?.y ?? input.y ?? 0;
                 robot.setPose(pose, 1 - Math.exp(-20 * dt));
                 const stroke = !ghost && isPettingHand(input);
                 if (held || input.pinch || !input.active || rules.won) pettingBlend[index] = 0;
@@ -360,22 +438,24 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
                 const aboveHead = amount ? pettingHandOrigin(robot.getPose(), pettingCrown) : null;
                 robot.root.position.set(
                     x + ((aboveHead?.x ?? x) - x) * amount,
-                    .68 + ((aboveHead?.y ?? .68) - .68) * amount,
+                    floorY + .68 + ((aboveHead?.y ?? (floorY + .68)) - (floorY + .68)) * amount,
                     z + ((aboveHead?.z ?? z) - z) * amount
                 );
-                robot.cursor.position.set(x, 0.17, z); robot.cursor.scale.setScalar(held ? 1.6 : input.pinch ? 1.15 : 1);
+                robot.cursor.position.set(x, floorY + .17, z); robot.cursor.scale.setScalar(held ? 1.6 : input.pinch ? 1.15 : 1);
             });
+            if (rules.laserWarning && !previousLaserWarning && !paused) playSfx('switch');
+            previousLaserWarning = rules.laserWarning;
             if (rules.prism.owner !== previousOwner && rules.prism.owner !== null) playSfx('grab'); previousOwner = rules.prism.owner;
             if (rules.mistakes > previousMistakes) playSfx('burn'); previousMistakes = rules.mistakes;
             if (rules.doorOpen && !previousDoor) playSfx('crystal_ready'); previousDoor = rules.doorOpen;
             if (rules.won && !previousWin) {
                 playSfx('win'); previousWin = true; victoryAt = time; overlay.dataset.victory = 'true';
-                query('.e3-dialog-icon').textContent = 'MEMORY + YOU = TEAM'; query('.e3-dialog h2').textContent = 'Panda is home.';
-                query('.e3-dialog p').textContent = `${difficulty === 'easy' ? 'Simple' : 'Hard'} completed in ${Math.floor(rules.elapsed)}s · ${rules.mistakes} laser contacts${rules.echoReady ? ' · with an echo helper' : ' · live hands'}.`;
+                query('.e3-dialog-icon').textContent = 'MEMORY + YOU = TEAM'; query('.e3-dialog h2').textContent = text('victory');
+                query('.e3-dialog p').textContent = t('e3.result', { time: Math.floor(rules.elapsed), mistakes: rules.mistakes, method: text(rules.echoReady ? 'echoMethod' : 'handsMethod') });
                 query('[data-action="resume"]').hidden = true;
             }
             if (rules.won && time - victoryAt > 1.1) overlay.hidden = false;
-            const currentShadowKey = `${Math.floor(time * 12)}:${rules.panda.x.toFixed(2)}:${rules.panda.z.toFixed(2)}:${rules.prism.x.toFixed(2)}:${rules.prism.z.toFixed(2)}:${rules.doorOpen}`;
+            const currentShadowKey = `${Math.floor(time * 12)}:${rules.panda.x.toFixed(2)}:${rules.panda.z.toFixed(2)}:${rules.prism.x.toFixed(2)}:${rules.prism.z.toFixed(2)}:${rules.doorOpen}:${rules.liftHeight.toFixed(2)}:${rules.bridgeProgress.toFixed(2)}`;
             if (currentShadowKey !== shadowKey) { renderer.shadowMap.needsUpdate = true; shadowKey = currentShadowKey; }
             updateHud(now); renderer.render(w.scene, camera); renderDirty = false; frames++; fpsSum += frameSeconds;
             if (!paused && frameSeconds < 0.5) {
@@ -392,7 +472,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
-    const debug = { rules, project, getPandaAnimation: () => ({ mood: panda.animator.mood, rotation: pandaRotation.angle, facing: panda.body.rotation.y, playful: panda.animator.playful, petting: panda.animator.petting, eyes: panda.animator.eyeOpenness, crown: { x: pettingCrown.x, y: pettingCrown.y, z: pettingCrown.z }, elapsed: panda.animator.elapsed, lift: panda.body.position.y, head: panda.head.rotation.toArray() }), getHandPoses: () => robots.map(robot => ({ visible: robot.root.visible, position: { x: robot.root.position.x, y: robot.root.position.y, z: robot.root.position.z }, pose: robot.getPose().map(point => ({ x: point.x, y: -point.y, z: -point.z })) })), getMetrics: () => ({ fps: fpsSum ? frames / fpsSum : 0, handCount: rules.handCount, liveRobots: robots.slice(0, 2).filter(robot => robot.root.visible).length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, pixelRatio: renderer.getPixelRatio(), quality, paused, disposed }), starts: { prism: PRISM_START, panda: PANDA_START, target: TARGET, door: DOOR } };
+    const debug = { rules, project, getPandaAnimation: () => ({ mood: panda.animator.mood, rotation: pandaRotation.angle, facing: panda.body.rotation.y, playful: panda.animator.playful, petting: panda.animator.petting, eyes: panda.animator.eyeOpenness, crown: { x: pettingCrown.x, y: pettingCrown.y, z: pettingCrown.z }, elapsed: panda.animator.elapsed, lift: panda.body.position.y, head: panda.head.rotation.toArray() }), getHandPoses: () => robots.map(robot => ({ visible: robot.root.visible, position: { x: robot.root.position.x, y: robot.root.position.y, z: robot.root.position.z }, pose: robot.getPose().map(point => ({ x: point.x, y: -point.y, z: -point.z })) })), getMetrics: () => ({ fps: fpsSum ? frames / fpsSum : 0, handCount: rules.handCount, liveRobots: robots.slice(0, 2).filter(robot => robot.root.visible).length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, pixelRatio: renderer.getPixelRatio(), quality, paused, disposed }), starts: { prism: PRISM_START, panda: PANDA_START, target: TARGET, upper: UPPER_TARGET, lift: LIFT_CENTER, door: DOOR }, surfaces: SURFACES };
     const debugWindow = window as unknown as { __echo3D?: typeof debug };
     if (import.meta.env.DEV) debugWindow.__echo3D = debug;
     return { dispose() {

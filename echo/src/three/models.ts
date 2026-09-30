@@ -55,39 +55,6 @@ export class Workshop {
     }
 }
 
-export function buildRoom(w: Workshop) {
-    const root = w.scene;
-    w.box(root, [10.3, 0.55, 6.8], [0, -0.42, 0], '#30203f');
-    w.box(root, [9.9, 0.22, 6.4], [0, -0.04, 0], '#ffd9bb');
-    w.box(root, [9.15, 0.06, 5.7], [0, 0.09, 0], '#edbaa1');
-    w.box(root, [9.7, 1.35, 0.38], [0, 0.8, -3.04], '#4a345b');
-    w.box(root, [10.0, 0.15, 0.55], [0, 1.5, -3.05], '#735774');
-    w.box(root, [3.4, 0.73, 0.12], [-0.7, 0.84, -2.8], '#2c203e');
-    w.box(root, [3.15, 0.05, 0.14], [-0.7, 1.07, -2.69], '#efb673');
-    for (let i = 0; i < 7; i++) w.box(root, [0.12, 0.38, 0.04], [2.25 + i * 0.24, 0.83, -2.81], '#30203e', false);
-    for (let i = 0; i < 3; i++) { w.cylinder(root, 0.055, 0.045, [-3.8 + i * 0.2, 1.1, -2.82], ['#8da3ff', '#efb875', '#fa8d77'][i]); }
-    // Fine circuit traces and the safe walkway run across the foreground.
-    for (const z of [-1.9, 0.8]) w.box(root, [7.9, 0.008, 0.016], [0, 0.13, z], '#c68d7d', false);
-    for (let i = 0; i < 9; i++) w.box(root, [0.16, 0.014, 0.035], [-2.0 + i * 0.5, 0.14, 1.55], '#fff0d7', false);
-    w.ring(root, 0.65, [3.05, 0.14, 1.55], '#788bed', 0.013);
-    w.ring(root, 0.42, [0, 0.16, -0.75], '#df8b48', 0.024);
-    w.ring(root, 0.6, [0, 0.145, -0.75], '#ffe4b4', 0.01);
-    for (const x of [-4.4, 4.4]) {
-        w.box(root, [0.17, 0.14, 5.45], [x, 0.19, 0], '#b88d85');
-        for (const z of [-2.6, 2.6]) w.cylinder(root, 0.05, 0.018, [x, 0.27, z], '#69506c');
-    }
-    const emitter = new THREE.Group(); root.add(emitter);
-    w.box(emitter, [0.64, 0.55, 0.7], [0, 0.42, -2.7], '#fce8cd');
-    w.box(emitter, [0.35, 0.22, 0.08], [0, 0.48, -2.29], '#5a3349');
-    w.sphere(emitter, [0.1, 0.09, 0.035], [0, 0.48, -2.24], '#ff704d');
-    w.box(root, [0.44, 0.16, 0.3], [0, 0.19, 2.55], '#69516f');
-    // Warm foreground edge and independent machinery details.
-    w.box(root, [8.9, 0.025, 0.05], [0, -0.3, 3.42], '#f6b65e');
-    const floor = w.mesh(w.geometry('floor', () => new THREE.PlaneGeometry(200, 200)), w.material('#24182f'), root, [0, -0.9, 0]);
-    floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
-    return root;
-}
-
 export function buildPanda(w: Workshop) {
     const root = new THREE.Group(); w.scene.add(root);
     const body = new THREE.Group(); root.add(body);
@@ -157,7 +124,6 @@ export function buildDoor(w: Workshop) {
     return { root, panels, light, ring };
 }
 
-/** A lightweight robotic exoskeleton: each MediaPipe landmark is a real joint. */
 export function buildRobot(w: Workshop, color: string, ghost = false, side: -1 | 1 = -1, minimal = false) {
     const root = new THREE.Group(); w.scene.add(root);
     const jointGeometry = w.geometry('robotJoint', () => new THREE.SphereGeometry(1, 8, 6));

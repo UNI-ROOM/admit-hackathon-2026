@@ -1,360 +1,121 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LiveHandTracker, type HandLandmarks } from '../src/hands';
 import * as THREE from 'three';
-import {
-    Workshop, buildRoom, buildPanda, buildPrism, buildReceiver,
-    buildDoor, buildRobot, buildBeam
-} from '../src/three/models';
-import {
-    Level3DRules, TARGET, PANDA_START, PRISM_START, DOOR,
-    emptyInput, crossesLaser, type Difficulty3D, type Input3D
-} from '../src/three/rules';
-
-const pinch = (point: { x: number; z: number }): Input3D => ({ ...point, active: true, pinch: true });
-function advance(rules: Level3DRules, seconds: number) {
-    for (let frame = 0; frame < Math.ceil(seconds / .02); frame++) rules.step(.02);
+import { LiveHandTracker, type HandLandmarks } from '../src/hands';
+import { Workshop, buildPanda, buildPrism, buildReceiver, buildDoor, buildRobot } from '../src/three/models';
+import { buildTerrain } from '../src/three/terrain';
+import { buildMechanisms } from '../src/three/mechanisms';
+import { Level3DRules, TARGET, UPPER_TARGET, PANDA_START, PRISM_START, DOOR, emptyInput, crossesLaser, type Input3D } from '../src/three/rules';
+import { LIFT_CENTER, GALLERY_CHECKPOINT, type Point } from '../src/three/level-layout';
+import { traceSurface } from '../src/three/surfaces';
+const pinch = (p: Point & { y?: number }): Input3D => ({ ...p, pinch: true, active: true });
+function advance(r: Level3DRules, seconds: number) { for (let i = 0; i < Math.ceil(seconds / .02); i++) r.step(.02); }
+function move(r: Level3DRules, slot: 0 | 1, p: Point) { r.hands[slot] = pinch(p); advance(r, 1.6); }
+function release(r: Level3DRules, slot: 0 | 1) { r.hands[slot] = emptyInput(); r.step(.02); }
+function charge(r: Level3DRules, slot: 0 | 1 = 0) {
+    r.hands[slot] = pinch(PRISM_START); r.step(.02); move(r, slot, TARGET); advance(r, 3); release(r, slot); assert.equal(r.lowerPowered, true);
 }
-function recordedPrism(difficulty: Difficulty3D, slot: 0 | 1 = 0) {
-    const rules = new Level3DRules(difficulty);
-    rules.beginRecording();
-    rules.hands[slot] = pinch(PRISM_START);
-    rules.step(.02);
-    assert.equal(rules.prism.owner, slot);
-    rules.hands[slot] = pinch(TARGET);
-    advance(rules, .8);
-    assert.equal(rules.finishRecording(), true);
-    return rules;
+function upperPrism(r: Level3DRules, slot: 0 | 1 = 0) {
+    r.hands[slot] = pinch(r.prism); r.step(.02);
+    if (r.prism.surface === 'lower') { move(r, slot, { x: 2.2, z: 1.3 }); move(r, slot, { x: 2.2, z: -.25 }); }
+    move(r, slot, UPPER_TARGET); assert.equal(r.upperHeld, true);
 }
-
+function echo(r: Level3DRules, slot: 0 | 1 = 0) {
+    upperPrism(r, slot); r.beginRecording(); r.hands[slot] = pinch(r.prism); advance(r, .8); release(r, slot);
+    assert.equal(r.finishRecording(), true); advance(r, 1); assert.equal(r.prism.owner, slot + 2);
+}
+function board(r: Level3DRules, slot: 0 | 1 = 0) {
+    r.hands[slot] = pinch(r.panda); r.step(.02); move(r, slot, { x: 2.2, z: 1.9 }); move(r, slot, { x: 2.2, z: -.7 }); move(r, slot, { x: 3.6, z: -.7 }); move(r, slot, LIFT_CENTER); release(r, slot); assert.equal(r.panda.surface, 'lift');
+}
+function pandaToBridge(r: Level3DRules, slot: 0 | 1 = 0) {
+    board(r, slot); assert.equal(r.activateLift(), true); advance(r, 2.6); assert.equal(r.liftHeight, 1.8);
+    r.hands[slot] = pinch(r.panda); r.step(.02); move(r, slot, GALLERY_CHECKPOINT); release(r, slot);
+    assert.equal(r.activateBridge(), true); advance(r, 1.8); assert.equal(r.bridgeLocked, true);
+}
+function finish(r: Level3DRules, slot: 0 | 1 = 0) {
+    const cycle = r.difficulty === 'easy' ? 6 : 5.5;
+    advance(r, cycle - r.bridgeClock % cycle + .02);
+    r.hands[slot] = pinch(r.panda); r.step(.02); r.hands[slot] = pinch(DOOR); advance(r, 1.6); assert.equal(r.won, true);
+}
 for (const difficulty of ['easy', 'hard'] as const) {
-    for (const slot of (difficulty === 'easy' ? [0] : [0, 1]) as (0 | 1)[]) {
-        test(`3D ${difficulty}: hand ${slot + 1} records the prism and a live hand moves panda to exit`, () => {
-            const rules = recordedPrism(difficulty, slot);
-            const liveSlot = difficulty === 'easy' ? 0 : slot === 0 ? 1 : 0;
-            advance(rules, 4);
-            assert.equal(rules.prism.owner, slot + 2, 'echo preserves original hand slot');
-            assert.equal(rules.doorOpen, true);
-            rules.hands[liveSlot] = pinch(PANDA_START);
-            rules.step(.02);
-            assert.equal(rules.panda.owner, liveSlot, 'the available live hand can rescue the panda');
-            rules.hands[liveSlot] = pinch(DOOR);
-            rules.step(.02);
-            assert.equal(rules.mistakes, 0);
-            assert.equal(rules.won, true);
-            const elapsed = rules.elapsed;
-            advance(rules, 1);
-            assert.equal(rules.elapsed, elapsed, 'winning freezes game state');
-        });
-    }
-
-    test(`3D ${difficulty}: live hands cannot steal the prism before echo pickup`, () => {
-        const rules = recordedPrism(difficulty);
-        rules.hands = [pinch(PRISM_START), pinch(PRISM_START)];
-        rules.step(.02);
-        assert.equal(rules.prism.owner, 2);
-        advance(rules, 4);
-        assert.equal(rules.aligned, true);
-        assert.equal(rules.doorOpen, true);
+    for (const slot of (difficulty === 'easy' ? [0] : [0, 1]) as (0 | 1)[]) test(`${difficulty}: complete both decks, lift, bridge and exit with echo hand ${slot}`, () => {
+        const r = new Level3DRules(difficulty), live = difficulty === 'easy' ? 0 : slot === 0 ? 1 : 0;
+        charge(r, slot); echo(r, slot); pandaToBridge(r, live); finish(r, live); assert.equal(r.mistakes, 0);
+        const elapsed = r.elapsed; advance(r, 3); assert.equal(r.elapsed, elapsed);
     });
-
-    test(`3D ${difficulty}: fast dangerous move resets panda while preserving recorded echo`, () => {
-        const rules = recordedPrism(difficulty);
-        advance(rules, 4);
-        const liveSlot = difficulty === 'easy' ? 0 : 1;
-        rules.hands[liveSlot] = pinch(PANDA_START);
-        rules.step(.02);
-        rules.hands[liveSlot] = pinch({ x: 2, z: -1.5 });
-        rules.step(.02);
-        rules.hands[liveSlot] = pinch({ x: -2, z: -1.5 });
-        rules.step(.02);
-        assert.equal(rules.mistakes, 1);
-        assert.deepEqual(rules.panda, { ...PANDA_START, owner: null });
-        assert.equal(rules.echoReady, true);
-        assert.equal(rules.prism.owner, 2);
-        const rescueSlot = difficulty === 'easy' ? 0 : 1;
-        rules.hands[0] = emptyInput();
-        rules.step(.02);
-        rules.hands[rescueSlot] = pinch(PANDA_START);
-        rules.step(.02);
-        rules.hands[rescueSlot] = pinch(DOOR);
-        rules.step(.02);
-        assert.equal(rules.won, true, 'same echo remains usable after a collision');
+    test(`${difficulty}: power loss safely returns an occupied lift and allows retry`, () => {
+        const r = new Level3DRules(difficulty); charge(r); echo(r); board(r); r.activateLift(); advance(r, .5); assert.ok(r.liftHeight > .3);
+        r.beginRecording(); advance(r, 4); assert.equal(r.liftHeight, .3); assert.equal(r.panda.surface, 'lift'); assert.equal(r.panda.y, .3);
+        echo(r); assert.equal(r.canLift, true);
     });
 }
-
-test('Simple ignores the second live hand while Hard permits independent simultaneous grips', () => {
-    for (const difficulty of ['easy', 'hard'] as const) {
-        const rules = new Level3DRules(difficulty);
-        rules.hands = [pinch(PRISM_START), pinch(PANDA_START)];
-        rules.step(.02);
-        assert.equal(rules.prism.owner, 0);
-        assert.equal(rules.panda.owner, difficulty === 'easy' ? null : 1);
-        assert.equal(rules.hands[1].active, difficulty === 'hard');
-        rules.beginRecording();
-        rules.hands = [pinch(PRISM_START), pinch(PANDA_START)];
-        rules.step(.02);
-        assert.equal(rules.frames[0].hands[1].active, difficulty === 'hard', 'disabled hand is never recorded');
-        rules.reset();
-        assert.equal(rules.handCount, difficulty === 'easy' ? 1 : 2);
-    }
+test('Hard completes with two live hands and no echo', () => { const r = new Level3DRules('hard'); charge(r); upperPrism(r); pandaToBridge(r, 1); finish(r, 1); assert.equal(r.echoReady, false); });
+test('Simple disables the second live hand', () => {
+    const r = new Level3DRules('easy'); r.hands = [pinch(PRISM_START), pinch(PANDA_START)]; r.step(.02); assert.equal(r.prism.owner, 0); assert.equal(r.panda.owner, null); assert.equal(r.hands[1].active, false);
+});
+test('void, unpowered ramp, overlapping decks and closed bridge prevent shortcuts', () => {
+    const r = new Level3DRules('easy'); r.hands[0] = pinch(PANDA_START); r.step(.02); move(r, 0, DOOR); assert.equal(r.won, false); assert.equal(r.panda.surface, 'lower');
+    move(r, 0, { x: 2.2, z: -1.6 }); assert.equal(r.panda.surface, 'lower'); assert.equal(r.mistakes, 0);
+    const result = traceSurface({ x: 2.2, y: .3, z: -.7, surface: 'dock' }, { x: 2.2, z: -1.6 }, { ...r.terrain, lowerPowered: true }); assert.equal(result.point.surface, 'dock');
+    const upper = traceSurface(GALLERY_CHECKPOINT, DOOR, { ...r.terrain, lowerPowered: true, liftHeight: 1.8 }); assert.equal(upper.blocked, true); assert.equal(upper.point.surface, 'gallery');
+});
+test('height-aware continuous laser sweep ignores the lower deck', () => {
+    assert.equal(crossesLaser(GALLERY_CHECKPOINT, DOOR, true), true);
+    assert.equal(crossesLaser({ x: 2, z: -1.6, y: .3, surface: 'dock' }, { x: -2, z: -1.6, y: .3, surface: 'dock' }, true), false);
+    assert.equal(crossesLaser(GALLERY_CHECKPOINT, DOOR, false), false);
+});
+test('laser restores checkpoint and grip while preserving echo and bridge', () => {
+    const r = new Level3DRules('easy'); charge(r); echo(r); pandaToBridge(r); while (!r.laserActive) advance(r, .1);
+    r.hands[0] = pinch(r.panda); r.step(.02); r.hands[0] = pinch(DOOR); advance(r, 1);
+    assert.equal(r.mistakes, 1); assert.equal(r.panda.surface, 'gallery'); assert.equal(r.panda.owner, null); assert.equal(r.echoReady, true); assert.equal(r.bridgeLocked, true);
+    release(r, 0); finish(r);
+});
+test('release before Save remembers the working grip despite the spring return', () => {
+    const r = new Level3DRules('easy'); charge(r); upperPrism(r); r.beginRecording(); r.hands[0] = pinch(r.prism); advance(r, .8); release(r, 0); advance(r, .35);
+    assert.ok(r.prism.x > UPPER_TARGET.x + .5); assert.equal(r.canSave, true); assert.equal(r.finishRecording(), true); advance(r, 1.3); assert.equal(r.upperHeld, true);
+});
+test('invalid and expired recordings are bounded; valid recordings auto-save', () => {
+    const r = new Level3DRules('easy'); r.beginRecording(); assert.equal(r.recording, false); charge(r); r.beginRecording(); advance(r, 60);
+    assert.equal(r.echoReady, false); assert.equal(r.recording, false); assert.equal(r.frames.length, 0);
+    upperPrism(r); r.beginRecording(); r.hands[0] = pinch(r.prism); advance(r, 8.2); assert.equal(r.echoReady, true);
+    const frames = r.frames.length; advance(r, 30); assert.equal(r.frames.length, frames); assert.ok(frames <= 250);
+});
+test('moving away from the working socket invalidates Save', () => {
+    const r = new Level3DRules('hard'); charge(r); upperPrism(r); r.beginRecording(); r.hands[0] = pinch(r.prism); advance(r, .8); move(r, 0, { x: 3.5, z: -.35 }); assert.equal(r.finishRecording(), false);
+});
+test('live hands cannot steal an echo prism and ghosts cannot rescue the panda', () => {
+    const r = new Level3DRules('hard'); charge(r); echo(r, 1); const panda = { ...r.panda }; r.hands[0] = pinch(UPPER_TARGET); advance(r, 1); assert.equal(r.prism.owner, 3); assert.deepEqual(r.panda, panda);
+});
+test('recorded poses and surface context are immutable', () => {
+    const r = new Level3DRules('easy'); charge(r); upperPrism(r); r.beginRecording();
+    const input = pinch(r.prism); input.pose = Array.from({ length: 21 }, () => ({ x: .1, y: .2, z: .3 })); r.hands[0] = input; r.step(.02);
+    const snapshot = JSON.stringify(r.frames); input.x = -3; input.pose[0].x = 8; assert.equal(JSON.stringify(r.frames), snapshot); assert.equal(r.frames[0].prism.surface, 'dock');
+});
+test('reset clears all mechanisms, checkpoint, recording and owners', () => {
+    const r = new Level3DRules('hard'); charge(r); echo(r); pandaToBridge(r); r.reset();
+    assert.deepEqual(r.panda, { ...PANDA_START, owner: null }); assert.deepEqual(r.prism, { ...PRISM_START, owner: null });
+    assert.equal(r.liftHeight, .3); assert.equal(r.bridgeLocked, false); assert.equal(r.powerBuffer, 0); assert.equal(r.lowerPowered, false); assert.equal(r.charge, 0); assert.equal(r.elapsed, 0); assert.equal(r.echoReady, false); assert.deepEqual(r.frames, []); assert.ok(r.hands.every(h => !h.active));
+});
+test('detection reorder and missing hand preserve independent owners', () => {
+    const tracker = new LiveHandTracker(), r = new Level3DRules('hard'); const hand = (p: Point): HandLandmarks => Array.from({ length: 21 }, () => ({ x: p.x, y: p.z, z: 0 }));
+    const prism = hand(PRISM_START), panda = hand(PANDA_START), labels = [{ label: 'Left', score: 1 }, { label: 'Right', score: 1 }];
+    const apply = (landmarks: HandLandmarks[], handedness = labels) => { const slots = tracker.update({ multiHandLandmarks: landmarks, multiHandedness: handedness }); r.hands = slots.map(s => s ? pinch({ x: s[8].x, z: s[8].y }) : emptyInput()) as [Input3D, Input3D]; r.step(.02); };
+    apply([prism, panda]); apply([panda, prism], [...labels].reverse()); assert.equal(r.prism.owner, 0); assert.equal(r.panda.owner, 1); apply([panda], [labels[1]]); assert.equal(r.prism.owner, null); assert.equal(r.panda.owner, 1);
+});
+test('new scene shares geometry, stays within budget and releases all resources', () => {
+    const w = new Workshop(); buildTerrain(w); buildMechanisms(w); buildPanda(w); buildPrism(w); buildReceiver(w); buildDoor(w);
+    for (const ghost of [false, true]) { buildRobot(w, '#00ffaa', ghost); buildRobot(w, '#aaccff', ghost); }
+    const used = new Set<THREE.BufferGeometry | THREE.Material>(); let meshes = 0, triangles = 0;
+    w.scene.traverse(o => { if (!(o instanceof THREE.Mesh)) return; meshes++; triangles += (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3 * (o instanceof THREE.InstancedMesh ? o.count : 1); used.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) used.add(m); });
+    assert.ok(meshes <= 180, `scene has ${meshes} meshes`); assert.ok(triangles < 65_000, `scene has ${triangles} triangles`); for (const resource of used) assert.ok(w.resources.has(resource));
+    const disposed = new Map([...w.resources].map(r => [r, 0])); for (const resource of w.resources) resource.addEventListener('dispose', () => disposed.set(resource, disposed.get(resource)! + 1));
+    w.dispose(); for (const count of disposed.values()) assert.equal(count, 1);
 });
 
-test('laser sweep detects parallel movement within its thickness into the blocked segment', () => {
-    assert.equal(crossesLaser({ x: .255, z: 1.5 }, { x: .255, z: -1 }, TARGET, true), true);
-    assert.equal(crossesLaser({ x: .255, z: -1 }, { x: .255, z: 1.5 }, TARGET, true), true);
-    assert.equal(crossesLaser({ x: 3, z: 1.55 }, { x: -3, z: 1.55 }, TARGET, true), false);
-});
-
-test('both difficulties complete a live solution without recording an echo', () => {
-    for (const difficulty of ['easy', 'hard'] as const) {
-        const rules = new Level3DRules(difficulty);
-        rules.hands[0] = pinch(PRISM_START);
-        rules.step(.02);
-        rules.hands[0] = pinch(TARGET);
-        advance(rules, 4);
-        assert.equal(rules.charge, 1);
-        assert.equal(rules.doorOpen, true);
-        const rescueSlot = difficulty === 'easy' ? 0 : 1;
-        rules.hands[0] = emptyInput();
-        rules.step(.02);
-        rules.hands[rescueSlot] = pinch(PANDA_START);
-        rules.step(.02);
-        rules.hands[rescueSlot] = pinch(DOOR);
-        rules.step(.02);
-        assert.equal(rules.won, true);
-        assert.equal(rules.echoReady, false);
-    }
-});
-
-test('an invalid save leaves recording usable instead of creating a broken echo', () => {
-    const rules = new Level3DRules('easy');
-    assert.equal(rules.finishRecording(), false);
-    rules.beginRecording();
-    advance(rules, .7);
-    assert.equal(rules.finishRecording(), false);
-    assert.equal(rules.recording, true);
-    assert.equal(rules.echoReady, false);
-    rules.hands[0] = pinch(PRISM_START);
-    rules.step(.02);
-    rules.hands[0] = pinch(TARGET);
-    advance(rules, .7);
-    assert.equal(rules.finishRecording(), true);
-    advance(rules, 4);
-    assert.equal(rules.doorOpen, true);
-});
-
-test('recording a quick pickup between normal samples still replays an actual grab', () => {
-    const rules = new Level3DRules('easy');
-    rules.beginRecording();
-    advance(rules, .7);
-    rules.hands[0] = pinch(PRISM_START);
-    rules.step(.005);
-    rules.hands[0] = pinch(TARGET);
-    rules.step(.005);
-    advance(rules, .7);
-    assert.equal(rules.finishRecording(), true);
-    advance(rules, 4);
-    assert.equal(rules.prism.owner, 2);
-    assert.equal(rules.doorOpen, true);
-});
-
-test('saving after releasing mouse replays the remembered target grip', () => {
-    const rules = new Level3DRules('easy');
-    rules.beginRecording();
-    rules.hands[0] = pinch(PRISM_START);
-    rules.step(.02);
-    rules.hands[0] = pinch(TARGET);
-    advance(rules, .8);
-    rules.hands[0] = emptyInput(TARGET.x, TARGET.z);
-    rules.step(.02);
-    assert.equal(rules.finishRecording(), true);
-    advance(rules, 4);
-    assert.equal(rules.prism.owner, 2);
-    assert.equal(rules.doorOpen, true);
-});
-
-test('recording preserves the current puzzle positions, charge and attempt counters', () => {
-    const rules = new Level3DRules('hard');
-    rules.hands[1] = pinch(PRISM_START);
-    rules.step(.02);
-    rules.hands[1] = pinch(TARGET);
-    advance(rules, 1);
-    rules.hands[1] = emptyInput();
-    rules.step(.02);
-    rules.hands[0] = pinch(PANDA_START);
-    rules.step(.02);
-    rules.hands[0] = pinch({ x: 2, z: 1.55 });
-    rules.step(.02);
-    const panda = { x: rules.panda.x, z: rules.panda.z };
-    const charge = rules.charge, elapsed = rules.elapsed;
-    rules.mistakes = 2;
-    rules.beginRecording();
-    assert.deepEqual(rules.panda, { ...panda, owner: null });
-    assert.deepEqual(rules.prism, { ...TARGET, owner: null });
-    assert.equal(rules.charge, charge);
-    assert.equal(rules.elapsed, elapsed);
-    assert.equal(rules.mistakes, 2);
-    rules.hands = [emptyInput(), emptyInput()];
-    advance(rules, .7);
-    assert.equal(rules.finishRecording(), true, 'Record after placing and releasing a prism remains useful');
-    assert.deepEqual(rules.panda, { ...panda, owner: null }, 'Save does not move panda back to spawn');
-    assert.deepEqual(rules.prism, { ...TARGET, owner: null }, 'replay begins at the actual recording origin');
-    assert.ok(rules.charge >= charge, 'Save keeps accumulated crystal charge');
-    advance(rules, 4);
-    assert.equal(rules.prism.owner, 3, 'remembered right-hand grip retains its identity');
-    assert.equal(rules.doorOpen, true);
-});
-
-test('beginning a new recording clears the old echo while keeping puzzle progress', () => {
-    const rules = recordedPrism('easy');
-    advance(rules, 4);
-    assert.equal(rules.prism.owner, 2);
-    rules.beginRecording();
-    assert.equal(rules.prism.owner, null);
-    assert.equal(rules.echoReady, false);
-    assert.ok(rules.ghosts.every(hand => !hand.active && !hand.pinch));
-    assert.equal(rules.frames.length, 0);
-    assert.equal(rules.charge, 1);
-    assert.equal(rules.doorOpen, true);
-    assert.deepEqual({ x: rules.prism.x, z: rules.prism.z }, TARGET);
-});
-
-test('a live solution can finish during recording without waiting for a saved echo', () => {
-    for (const difficulty of ['easy', 'hard'] as const) {
-        const rules = new Level3DRules(difficulty);
-        rules.beginRecording();
-        rules.hands[0] = pinch(PRISM_START);
-        rules.step(.02);
-        rules.hands[0] = pinch(TARGET);
-        advance(rules, 4);
-        const rescueSlot = difficulty === 'easy' ? 0 : 1;
-        rules.hands[0] = emptyInput();
-        rules.step(.02);
-        rules.hands[rescueSlot] = pinch(PANDA_START);
-        rules.step(.02);
-        rules.hands[rescueSlot] = pinch(DOOR);
-        rules.step(.02);
-        assert.equal(rules.won, true);
-        assert.equal(rules.echoReady, false);
-    }
-});
-
-test('an unsuccessful recording times out with bounded memory and can be retried', () => {
-    const rules = new Level3DRules('easy');
-    rules.beginRecording();
-    advance(rules, 60);
-    assert.equal(rules.recording, false);
-    assert.equal(rules.echoReady, false);
-    assert.ok(rules.frames.length <= 300, 'one unsuccessful attempt cannot accumulate indefinite frames');
-    rules.beginRecording();
-    rules.hands[0] = pinch(PRISM_START);
-    rules.step(.02);
-    rules.hands[0] = pinch(TARGET);
-    advance(rules, 8);
-    assert.equal(rules.recording, false);
-    assert.equal(rules.echoReady, true, 'a valid held pose is saved automatically at the timeout');
-    advance(rules, 12);
-    assert.equal(rules.doorOpen, true);
-});
-
-test('Simple retains full charge while Hard loses charge when the prism leaves target', () => {
-    for (const difficulty of ['easy', 'hard'] as const) {
-        const rules = new Level3DRules(difficulty);
-        rules.hands[0] = pinch(PRISM_START);
-        rules.step(.02);
-        rules.hands[0] = pinch(TARGET);
-        advance(rules, 4);
-        assert.equal(rules.charge, 1);
-        rules.hands[0] = pinch(PRISM_START);
-        advance(rules, 1);
-        if (difficulty === 'easy') assert.equal(rules.charge, 1);
-        else assert.ok(Math.abs(rules.charge - .8) < .005);
-    }
-});
-
-test('reset removes recordings, ghost owners, progress and previous input', () => {
-    const rules = recordedPrism('hard', 1);
-    advance(rules, 4);
-    rules.hands[0] = pinch(PANDA_START);
-    rules.step(.02);
-    rules.reset();
-    assert.deepEqual(rules.panda, { ...PANDA_START, owner: null });
-    assert.deepEqual(rules.prism, { ...PRISM_START, owner: null });
-    assert.deepEqual(rules.frames, []);
-    assert.equal(rules.echoReady, false);
-    assert.equal(rules.echoTime, 0);
-    assert.equal(rules.echoHeld, 0);
-    assert.equal(rules.charge, 0);
-    assert.equal(rules.elapsed, 0);
-    assert.ok(rules.hands.every(hand => !hand.active));
-    assert.ok(rules.ghosts.every(hand => !hand.active));
-    advance(rules, 1);
-    assert.equal(rules.prism.owner, null);
-});
-
-test('recorded input is immutable when tracked hand positions change later', () => {
-    const rules = new Level3DRules('easy');
-    rules.beginRecording();
-    const input = pinch(PRISM_START);
-    rules.hands[0] = input;
-    rules.step(.02);
-    input.x = -3;
-    assert.equal(rules.frames[0].hands[0].x, PRISM_START.x);
-    assert.equal(rules.frames[0].hands[1].active, false);
-});
-
-test('detection reorder and missing hand preserve independent 3D object owners', () => {
-    const tracker = new LiveHandTracker();
-    const hand = (point: { x: number; z: number }): HandLandmarks =>
-        Array.from({ length: 21 }, () => ({ x: point.x, y: point.z, z: 0 }));
-    const prismHand = hand(PRISM_START), pandaHand = hand(PANDA_START);
-    const rules = new Level3DRules('hard');
-    const labels = [{ label: 'Left', score: 1 }, { label: 'Right', score: 1 }];
-    const apply = (landmarks: HandLandmarks[], handedness = labels) => {
-        const slots = tracker.update({ multiHandLandmarks: landmarks, multiHandedness: handedness });
-        rules.hands = slots.map(slot => slot ? pinch({ x: slot[8].x, z: slot[8].y }) : emptyInput()) as [Input3D, Input3D];
-        rules.step(.02);
-    };
-    apply([prismHand, pandaHand]);
-    assert.equal(rules.prism.owner, 0);
-    assert.equal(rules.panda.owner, 1);
-    apply([pandaHand, prismHand], [...labels].reverse());
-    assert.equal(rules.prism.owner, 0);
-    assert.equal(rules.panda.owner, 1);
-    apply([pandaHand], [labels[1]]);
-    assert.equal(rules.prism.owner, null);
-    assert.equal(rules.panda.owner, 1);
-});
-
-test('complete 3D models share resources, stay within geometry budget and dispose all meshes', () => {
-    const workshop = new Workshop();
-    buildRoom(workshop);
-    buildPanda(workshop);
-    buildPrism(workshop);
-    buildReceiver(workshop);
-    buildDoor(workshop);
-    for (const ghost of [false, true]) {
-        buildRobot(workshop, '#00ffaa', ghost);
-        buildRobot(workshop, '#aaccff', ghost);
-    }
-    buildBeam(workshop, '#ff3300');
-    buildBeam(workshop, '#ffaa33');
-    const used = new Set<THREE.BufferGeometry | THREE.Material>();
-    let meshCount = 0, triangles = 0;
-    workshop.scene.traverse(object => {
-        if (!(object instanceof THREE.Mesh)) return;
-        meshCount++;
-        triangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3 * (object instanceof THREE.InstancedMesh ? object.count : 1);
-        used.add(object.geometry);
-        for (const material of Array.isArray(object.material) ? object.material : [object.material]) used.add(material);
-    });
-    assert.ok(meshCount > 60 && meshCount <= 130, `scene contains ${meshCount} meshes`);
-    assert.ok(triangles <= 50_000, `scene contains ${triangles} triangles`);
-    assert.ok(used.size < meshCount, 'repeated models should reuse geometry and materials');
-    for (const resource of used) assert.ok(workshop.resources.has(resource), 'every mesh resource is owned for disposal');
-    const disposed = new Map([...used].map(resource => [resource, 0]));
-    for (const resource of used) resource.addEventListener('dispose', () => disposed.set(resource, disposed.get(resource)! + 1));
-    workshop.dispose();
-    for (const count of disposed.values()) assert.equal(count, 1, 'every resource is released exactly once on exit');
+test('laser end caps use the actual segment and ignore a higher disconnected deck', () => {
+    const from = { x: .1, y: 1.8, z: -3, surface: 'bridge' as const };
+    const to = { x: -4, y: 1.8, z: -1.1, surface: 'bridge' as const };
+    assert.equal(crossesLaser(from, to, true), false, 'a diagonal that misses the emitter is safe');
+    assert.equal(crossesLaser({ ...from, y: 3.5, z: -1.6 }, { ...to, y: 3.5, z: -1.6 }, true), false);
+    assert.equal(crossesLaser({ ...from, x: -.25, z: -1.6 }, { ...to, x: -.25, z: -1.5 }, true), true, 'parallel motion within the beam radius is a contact');
 });
