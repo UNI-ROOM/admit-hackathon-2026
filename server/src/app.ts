@@ -15,7 +15,7 @@ type Options = {
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const boardSQL = `SELECT u.id, u.nickname, SUM(b.best)::integer total, COUNT(*)::integer levels
-  FROM (SELECT user_id, level_id, MAX(score) best FROM runs GROUP BY user_id, level_id) b
+  FROM (SELECT user_id, level_id, MAX(score) best FROM runs WHERE level_id <= ${LEVEL_ECHOES.length} GROUP BY user_id, level_id) b
   JOIN users u ON u.id=b.user_id GROUP BY u.id ORDER BY total DESC, u.id ASC`;
 
 export function createApp({ db, sendCode, production = false, origin, now = Date.now }: Options) {
@@ -27,7 +27,7 @@ export function createApp({ db, sendCode, production = false, origin, now = Date
   async function snapshot(u: User) {
     const [progress, best] = await Promise.all([
       db.one('SELECT max_level, tutorial_done FROM progress WHERE user_id=$1', [u.id]),
-      db.all('SELECT level_id, MAX(score) score FROM runs WHERE user_id=$1 GROUP BY level_id', [u.id]),
+      db.all('SELECT level_id, MAX(score) score FROM runs WHERE user_id=$1 AND level_id <= $2 GROUP BY level_id', [u.id, LEVEL_ECHOES.length]),
     ]);
     return { user: { ...u, isGuest: !u.email }, progress, best: Object.fromEntries(best.map(r => [r.level_id, r.score])) };
   }

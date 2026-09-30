@@ -52,10 +52,10 @@ test('email attachment, guest merge, and code cannot be replayed',async(t)=>{
  assert.equal((await a('/auth/verify',{email:'a@example.com',code:s.code})).body.user.id,original);
  await a('/runs',{levelId:1,timeLeftMs:1000,echoesUsed:1,deaths:0,resets:0});
  await b('/session');await b('/runs',{levelId:2,timeLeftMs:2000,echoesUsed:1,deaths:0,resets:0});
- await b('/progress',{maxLevel:4,tutorialDone:true},'PUT');
+ await b('/progress',{maxLevel:3,tutorialDone:true},'PUT');
  s.tick();await b('/auth/request',{email:'a@example.com'});
  const merged=await b('/auth/verify',{email:'a@example.com',code:s.code});
- assert.equal(merged.body.user.id,original);assert.deepEqual(merged.body.best,{'1':1100,'2':1200});assert.equal(merged.body.progress.max_level,4);
+ assert.equal(merged.body.user.id,original);assert.deepEqual(merged.body.best,{'1':1100,'2':1200});assert.equal(merged.body.progress.max_level,3);
  assert.equal((await b('/auth/verify',{email:'a@example.com',code:s.code})).status,400);
  assert.equal((await a('/me',undefined,'GET')).body.user.id,original);
 });

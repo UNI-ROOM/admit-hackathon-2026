@@ -94,7 +94,7 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
     });
 
     test('9. Levels: validates all campaign levels have distinct titles and compliant parameters', () => {
-        assert.equal(LEVELS.length, 5);
+        assert.equal(LEVELS.length, 3);
         const titles = new Set(LEVELS.map(l => l.title));
         assert.equal(titles.size, LEVELS.length);
 

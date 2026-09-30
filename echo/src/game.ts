@@ -165,13 +165,11 @@ export function updateAndDrawParticles(ctx: CanvasRenderingContext2D, width: num
 }
 
 let lastDeathTime = 0;
-let pitFallY: number | null = null;
 export function triggerManDeath(message: string = 'ЧЕЛОВЕЧЕК СГОРЕЛ! 🔥 ПЕРЕЗАПУСК...') {
     const now = Date.now();
     if (now - lastDeathTime < 1000) return;
     lastDeathTime = now;
     gameState.deaths++;
-    pitFallY = null;
 
     playSfx('burn');
     spawnBurnExplosion(man.x, man.y);
@@ -207,10 +205,9 @@ export function resetLevel() {
     gameState.maxEchoes = lvl.maxEchoes || 1;
     man = { x: lvl.man.x, y: Math.min(lvl.man.y, 0.8), grabbedBy: null, color: '#facc15' };
     
-    levers = (lvl.levers || (lvl.lever ? [lvl.lever] : [])).map(p => ({ ...p, handleY: p.y, grabbedBy: null, active: false }));
+    levers = (lvl.lever ? [lvl.lever] : []).map(p => ({ ...p, handleY: p.y, grabbedBy: null, active: false }));
     lever = levers[0] || { x: -1, y: -1, handleY: -1, grabbedBy: null, active: false };
     lastDeathTime = 0;
-    pitFallY = null;
     
     door = { x: lvl.door.x, y: lvl.door.y, width: lvl.door.width, height: lvl.door.height, open: false };
     
@@ -290,16 +287,6 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
-    const pit = LEVELS[gameState.currentLevel - 1]?.pit;
-    if (pit) {
-        ctx.fillStyle = '#30112f';
-        ctx.fillRect(pit.minX * canvasWidth, 0.82 * canvasHeight, (pit.maxX - pit.minX) * canvasWidth, 0.18 * canvasHeight);
-        ctx.fillStyle = '#f87171';
-        ctx.fillRect(pit.minX * canvasWidth, 0.82 * canvasHeight, 4, 0.18 * canvasHeight);
-        ctx.fillRect(pit.maxX * canvasWidth - 4, 0.82 * canvasHeight, 4, 0.18 * canvasHeight);
-        drawUnmirroredText(ctx, 'ПРОПАСТЬ — ДЕРЖИ МОСТ', (pit.minX + pit.maxX) / 2 * canvasWidth, 0.70 * canvasHeight, 'bold 16px sans-serif', '#f87171');
-    }
-
     // Lever
     for (const lever of levers) {
         const lvx = lever.x * canvasWidth;
@@ -325,7 +312,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, levers.length > 1 ? `РЫЧАГ ${levers.indexOf(lever) === 0 ? 'A' : 'B'}` : 'РЫЧАГ', lvx, lvyTop - 20, '24px sans-serif', 'white');
+        drawUnmirroredText(ctx, 'РЫЧАГ', lvx, lvyTop - 20, '24px sans-serif', 'white');
     }
 
     // Door
@@ -416,7 +403,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, pit ? 'МОСТ' : 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
+        drawUnmirroredText(ctx, 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
     }
 
     // Prism
@@ -792,21 +779,7 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
 export function evaluateRules() {
     // Gravity logic
     const floor_y = 0.8;
-    const pit = LEVELS[gameState.currentLevel - 1]?.pit;
-    const overPit = pit && man.x > pit.minX && man.x < pit.maxX;
-    if (!overPit) pitFallY = null;
-    if (overPit && (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING')) {
-        const supported = plate && plate.grabbedBy && Math.abs(plate.x - man.x) < plate.width / 2 && plate.y >= 0.75 && plate.y <= 0.85;
-        if (supported && plate) { pitFallY = null; man.y = plate.y - plate.height / 2 - 0.03; }
-        else {
-            // Gravity applies while dragging too, so lifting cannot bypass the bridge.
-            man.grabbedBy = null;
-            pitFallY = (pitFallY ?? floor_y) + 0.03;
-            man.y = pitFallY;
-            if (man.y > 0.95) triggerManDeath('ЧЕЛОВЕЧЕК УПАЛ В ПРОПАСТЬ! Держи мост над разрывом.');
-        }
-    } else if (!man.grabbedBy) {
-        pitFallY = null;
+    if (!man.grabbedBy) {
         if (man.y < floor_y) man.y = Math.min(floor_y, man.y + 0.02);
         else if (man.y > floor_y) man.y = floor_y;
     }
@@ -824,9 +797,6 @@ export function evaluateRules() {
         if (prism.y < floor_y) prism.y = Math.min(floor_y, prism.y + 0.02);
         else if (prism.y > floor_y) prism.y = floor_y;
     }
-
-    // A released bridge falls into the pit instead of becoming permanent ground.
-    if (pit && plate && !plate.grabbedBy && plate.x > pit.minX && plate.x < pit.maxX) plate.y = 1.1;
 
     // Lever logic
     for (const lever of levers) {

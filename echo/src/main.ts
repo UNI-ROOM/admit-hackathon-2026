@@ -4,7 +4,7 @@ import { StateStabilizer, isFist, isOpenPalm, isPinching, isPointing, drawUnmirr
 import { 
     gameState, man, lever, tutorialBox, tutorialTarget, 
     resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
-    getAgentColor, plate, prism, deathBanner, levers
+    getAgentColor, plate, prism, deathBanner
 } from './game';
 import { LEVELS } from './levels';
 import { playSfx, unlockAudioContext } from './audio';
@@ -498,23 +498,6 @@ function onResults(results: any) {
                 currentHint = `Промах! Ты сжал пальцы рядом с ${targetName}, сдвинь руку ${moveInstruction}!`;
             } else if (gameState.mode === 'IDLE' && straight >= 1 && straight <= 3) {
                 currentHint = `Выпрями все пальцы (согнут ${bentFingers.join(', ')}), чтобы начать!`;
-            }
-        }
-    }
-
-    const levelConfig = LEVELS[gameState.currentLevel - 1];
-    if (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING') {
-        if (levelConfig.pit && plate) {
-            const center = (levelConfig.pit.minX + levelConfig.pit.maxX) / 2;
-            if (plate.y < 0.75) currentHint = `Мост слишком высоко: опусти на ${Math.round((0.8 - plate.y) * canvasElement.height)} px.`;
-            else if (Math.abs(plate.x - center) > 0.03) currentHint = `Сдвинь мост к центру пропасти на ${Math.round(Math.abs(plate.x - center) * canvasElement.width)} px.`;
-            else if (!plate.grabbedBy) currentHint = 'Мост нужно держать — запиши клона со щипком.';
-        }
-        if (levelConfig.levers) {
-            const inactive = levers.findIndex(l => !l.active);
-            if (inactive >= 0 && (gameState.mode === 'PLAYING' || gameState.echoIndex > 0)) {
-                const l = levers[inactive];
-                currentHint = `Рычаг ${inactive === 0 ? 'A' : 'B'} не дожат: потяни вниз ещё на ${Math.max(0, Math.round((l.y + 0.18 - l.handleY) * canvasElement.height))} px. Клон ${inactive + 1} должен держать его всю петлю.`;
             }
         }
     }

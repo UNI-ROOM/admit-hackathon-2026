@@ -110,8 +110,6 @@ export interface LevelConfig {
     plate?: { x: number, y: number, width: number, height: number };
     crystal?: { x: number, y: number, width: number, height: number };
     prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
-    pit?: { minX: number; maxX: number };
-    levers?: { x: number; y: number }[];
     maxEchoes?: number;
     hintIdle?: string;
     hintRecording?: string | string[];
