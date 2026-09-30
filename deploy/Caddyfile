@@ -3,3 +3,10 @@ vencera.jeanark.dev {
     reverse_proxy 127.0.0.1:8080
     header Permissions-Policy "camera=(self)"
 }
+
+stage.vencera.jeanark.dev {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8081
+    header Permissions-Policy "camera=(self)"
+    header X-Robots-Tag "noindex, nofollow"
+}
