@@ -92,6 +92,7 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
     box-sizing: border-box;
 }
 .menu-btn { min-width: 280px; }
+.level-card .menu-btn { min-width: 0; width: 100%; box-sizing: border-box; }
 .menu-btn:hover, .level-card button:hover, .account-hud button:hover, .account-panel button:hover, .settings-panel button:hover,
 .menu-btn:focus-visible, .level-card button:focus-visible, .account-panel button:focus-visible {
     border-color: var(--accent);
