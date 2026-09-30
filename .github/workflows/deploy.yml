@@ -1,0 +1,68 @@
+name: Test and deploy ECHO
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: echo-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            echo/package-lock.json
+            server/package-lock.json
+      - run: npm ci --prefix echo
+      - run: npm test --prefix echo
+      - run: npm run build --prefix echo
+      - run: npm ci --prefix server
+      - run: npm run check --prefix server
+      - run: npm test --prefix server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: echo/dist/
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: echo/dist/
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+      - name: Install pinned host key
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          rsync -az --delete echo/dist/ "$SSH_USER@$SSH_HOST:/srv/echo/web/"
+          rsync -az --delete --exclude=node_modules --exclude=.env --exclude=data server/ "$SSH_USER@$SSH_HOST:/srv/echo/api/"
+          rsync -az --delete shared/ "$SSH_USER@$SSH_HOST:/srv/echo/shared/"
+          ssh "$SSH_USER@$SSH_HOST" 'cd /srv/echo/api && npm ci --omit=dev && sudo systemctl restart echo-api'
+          for attempt in $(seq 1 15); do
+            if curl -fsS https://vencera.jeanark.dev/api/health; then exit 0; fi
+            sleep 2
+          done
+          exit 1
