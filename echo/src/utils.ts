@@ -49,6 +49,25 @@ export function isPinching(landmarks: any[]) {
     return Math.sqrt(Math.pow(thumb.x - index.x, 2) + Math.pow(thumb.y - index.y, 2)) < 0.08;
 }
 
+// UI click: thumb tip touching the middle fingertip. Measured relative to hand
+// size (wrist → middle knuckle) so it works at any distance from the camera.
+// Hysteresis keeps one touch from flickering into several clicks.
+export const THUMB_MIDDLE_ON = 0.3;
+export const THUMB_MIDDLE_OFF = 0.45;
+export function thumbMiddleRatio(landmarks: any[]) {
+    const d = (a: number, b: number) => Math.hypot(landmarks[a].x - landmarks[b].x, landmarks[a].y - landmarks[b].y);
+    return d(4, 12) / Math.max(d(0, 9), 1e-6);
+}
+export function isThumbMiddleTouch(landmarks: any[], wasTouching = false) {
+    if (!landmarks || landmarks.length < 21) return false;
+    const ratio = thumbMiddleRatio(landmarks);
+    // An index pinch brings the thumb closer to the index tip; don't count it.
+    const nearerIndex = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y)
+        < Math.hypot(landmarks[4].x - landmarks[12].x, landmarks[4].y - landmarks[12].y);
+    if (nearerIndex) return false;
+    return ratio < (wasTouching ? THUMB_MIDDLE_OFF : THUMB_MIDDLE_ON);
+}
+
 // 4th gesture: index finger pointing ( указательный палец )
 // Index finger extended above its PIP joint, middle/ring/pinky curled below theirs.
 export function isPointing(landmarks: any[]) {
