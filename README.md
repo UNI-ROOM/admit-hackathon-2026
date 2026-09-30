@@ -134,7 +134,7 @@ flowchart LR
 | **Fist** | ✊ | Emergency level reset (hold 5s) | All fingertips curled below their joints; circular hold timer |
 | **Index finger pointing (new 4th gesture)** | 👆 | Hand cursor for the whole interface (menus, dialogs, HUD): touch thumb to middle finger to click (the index finger stays on target), or hold 1 s. In gameplay the cursor appears only while pointing | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
 
-> 💡 The camera starts on the main menu, so the whole game — menu, level select, settings, profile, leaderboard, pause — can be operated by hand without a mouse. Outside gameplay the cursor follows any visible hand; touching thumb to middle finger clicks instantly while the index finger keeps aiming, and pointing and holding for 1 s clicks too. Dropdowns cycle to the next option.
+> 💡 The camera starts on the main menu, so the whole game — menu, level select, settings, profile, leaderboard, pause — can be operated by hand without a mouse. Outside gameplay the cursor follows any visible hand; touching thumb to middle finger clicks instantly while the index finger keeps aiming, and holding the cursor on a button for 1 s clicks too (any hand pose; it clicks once and re-arms after you move). Dropdowns cycle to the next option.
 
 ### 🧠 Наш Твист: Интеллектуальный анатомический дебаггер ошибок
 В отличие от тривиальных игр, где при потере руки игра просто молчит, ECHO включает **активную систему обратной связи**:
