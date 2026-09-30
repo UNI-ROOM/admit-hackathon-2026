@@ -210,8 +210,8 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 /* Difficulty choices and optional echo recording */
 .difficulty-option { text-align: left; }
 .difficulty-option .menu-btn { font-size: 10px; letter-spacing: 0; padding: 14px 8px; }
-.difficulty-option p { margin: 6px 0 4px; color: var(--muted); font: 13px/1.5 system-ui; }
-.levels-hint { margin: -12px 0 0; max-width: 720px; text-align: center; color: var(--muted); font: 14px/1.6 system-ui; }
+.levels-help { display: grid; gap: 6px; max-width: 720px; text-align: center; color: var(--muted); font: 14px/1.6 system-ui; }
+.levels-help p { margin: 0; }
 .round-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
 .round-actions[hidden] { display: none; }
 .account-hud[hidden] { display: none; }
@@ -220,6 +220,7 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 #play-button { border-color: var(--accent); }
 @media (max-width: 900px) {
     .levels-scene { justify-content: flex-start; }
+    .levels-grid { max-width: 100%; }
     .levels-nav { flex-wrap: wrap; justify-content: center; }
     #ui-layer { padding: 1rem; }
     .instruction-box { font-size: 1rem; padding: 12px; }

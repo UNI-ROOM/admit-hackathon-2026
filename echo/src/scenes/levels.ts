@@ -163,9 +163,7 @@ function render(): void {
                 const option = document.createElement('div');
                 option.className = 'difficulty-option';
                 const play = button(t(`levels.${difficulty}`), () => goToLevel(n, difficulty));
-                const description = document.createElement('p');
-                description.textContent = t(`levels.${difficulty}${n}`);
-                option.append(play, description);
+                option.append(play);
                 card.append(option);
             }
         }
@@ -180,10 +178,14 @@ function render(): void {
         button(t('levels.tutorial'), () => goToTutorial())
     );
 
+    const help = document.createElement('div');
+    help.className = 'levels-help';
+    const difficulty = document.createElement('p');
+    difficulty.textContent = t('levels.difficultySummary');
     const hint = document.createElement('p');
-    hint.className = 'levels-hint';
     hint.textContent = t('levels.difficultyHint');
-    container.append(heading, hint, grid, nav);
+    help.append(difficulty, hint);
+    container.append(heading, grid, help, nav);
 }
 
 render();
