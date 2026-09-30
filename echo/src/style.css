@@ -317,3 +317,15 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 @media (prefers-reduced-motion: reduce) {
     .mode-card.menu-btn, .mode-difficulty.menu-btn { transition: none; }
 }
+
+/* Music volume: dark track with an accent fill (--fill set from script), square pixel thumb. */
+.volume-control { display: flex; align-items: center; gap: 10px; }
+.account-panel input.volume-slider { -webkit-appearance: none; appearance: none; width: 160px; height: 6px; margin: 0; padding: 0; border: none; border-radius: 0; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) var(--fill, 0%), #1f1f1f var(--fill, 0%)); outline: none; }
+.volume-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: var(--fg); border: 2px solid var(--accent); border-radius: 0; box-shadow: 0 0 0 3px #000; }
+.volume-slider::-moz-range-thumb { width: 12px; height: 12px; background: var(--fg); border: 2px solid var(--accent); border-radius: 0; box-shadow: 0 0 0 3px #000; }
+.volume-slider::-moz-range-track { height: 6px; background: transparent; }
+.volume-slider:hover::-webkit-slider-thumb, .volume-slider:focus-visible::-webkit-slider-thumb { background: var(--accent-2); }
+.volume-slider:hover::-moz-range-thumb, .volume-slider:focus-visible::-moz-range-thumb { background: var(--accent-2); }
+.settings-panel button.volume-step { min-width: 36px; min-height: 36px; padding: 0; font: 16px/1 system-ui; }
+.volume-value { min-width: 3.2em; text-align: right; font: 12px var(--font-pixel); color: var(--accent-2); font-variant-numeric: tabular-nums; }
