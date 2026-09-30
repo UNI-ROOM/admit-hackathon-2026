@@ -78,17 +78,27 @@ export function openSettings(): void {
     const body = document.createElement('div'); panel.append(body);
     const settings = getSettings();
 
-    const volumeWrap = document.createElement('div'); volumeWrap.style.display = 'flex'; volumeWrap.style.alignItems = 'center'; volumeWrap.style.gap = '8px';
-    const volumeSlider = document.createElement('input'); volumeSlider.type = 'range'; volumeSlider.min = '0'; volumeSlider.max = '100'; volumeSlider.step = '1'; volumeSlider.dataset.dwell = '';
-    const initialVol = Math.round((settings.musicVolume ?? 0.1) * 100);
-    volumeSlider.value = String(initialVol);
-    const volumeText = document.createElement('span'); volumeText.style.minWidth = '3em'; volumeText.textContent = `${initialVol}%`;
-    volumeSlider.oninput = () => {
-        const val = parseInt(volumeSlider.value, 10) / 100;
-        volumeText.textContent = `${volumeSlider.value}%`;
-        updateSettings({ musicVolume: val });
+    // Styled slider for the mouse, plus −/+ buttons (5% steps) for the hand cursor.
+    const volumeWrap = document.createElement('div'); volumeWrap.className = 'volume-control';
+    const volumeSlider = document.createElement('input'); volumeSlider.type = 'range'; volumeSlider.min = '0'; volumeSlider.max = '100'; volumeSlider.step = '1';
+    volumeSlider.className = 'volume-slider'; volumeSlider.setAttribute('aria-label', t('settings.musicVolume'));
+    const volumeText = document.createElement('span'); volumeText.className = 'volume-value';
+    const setVolume = (percent: number, save = true) => {
+        const value = Math.max(0, Math.min(100, Math.round(percent)));
+        volumeSlider.value = String(value);
+        volumeSlider.style.setProperty('--fill', `${value}%`);
+        volumeText.textContent = `${value}%`;
+        if (save) updateSettings({ musicVolume: value / 100 });
     };
-    volumeWrap.append(volumeSlider, volumeText);
+    setVolume((settings.musicVolume ?? 0.1) * 100, false);
+    volumeSlider.oninput = () => setVolume(Number(volumeSlider.value));
+    const step = (label: string, delta: number) => {
+        const b = document.createElement('button'); b.type = 'button'; b.dataset.dwell = ''; b.className = 'volume-step';
+        b.textContent = label; b.setAttribute('aria-label', `${t('settings.musicVolume')} ${label}`);
+        b.onclick = () => setVolume(Number(volumeSlider.value) + delta);
+        return b;
+    };
+    volumeWrap.append(step('−', -5), volumeSlider, step('+', 5), volumeText);
 
     body.append(
         row(t('settings.sfx'), toggle(() => getSettings().sfx, on => updateSettings({ sfx: on }))),
