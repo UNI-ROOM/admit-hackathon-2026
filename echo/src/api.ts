@@ -1,5 +1,6 @@
+import type { Difficulty } from '../../shared/score';
 export interface Session { user: { id: string; nickname: string; email: string | null; isGuest: boolean }; progress: { max_level: number; tutorial_done: number }; best: Record<string, number> }
-export interface RunPayload { levelId: number; timeLeftMs: number; echoesUsed: number; deaths: number; resets: number }
+export interface RunPayload { difficulty?: Difficulty; levelId: number; timeLeftMs: number; echoesUsed: number; deaths: number; resets: number }
 export interface BoardRow { nickname: string; total: number; levels: number; isMe: boolean }
 export interface Rank { rank: number | null; total: number; levels: number; players: number }
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {

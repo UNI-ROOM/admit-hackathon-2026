@@ -1,6 +1,7 @@
 import { api, type Session, type RunPayload } from '../api';
-import { levelScore, LEVEL_ECHOES } from '../../../shared/score';
+import { levelScore, LEVEL_ECHOES, maxEchoesForLevel } from '../../../shared/score';
 import { t } from '../i18n';
+import { onChange } from '../scenes/router';
 let session: Session | null = null;
 let online = false;
 const hud = document.createElement('aside'); hud.className = 'account-hud';
@@ -8,6 +9,7 @@ const identity = document.createElement('span');
 const status = document.createElement('span');
 const panel = document.createElement('dialog'); panel.className = 'account-panel';
 document.body.append(hud, panel);
+onChange(scene => { hud.hidden = scene !== 'menu'; });
 function button(text:string, action:()=>void) { const b=document.createElement('button');b.textContent=text;b.type='button';b.dataset.dwell='';b.onclick=action;return b; }
 const login=button(t('account.signIn'),()=>auth());
 const nickname=button(t('account.nickname'),()=>editNickname());
@@ -51,7 +53,7 @@ export function openProfile(){
 }
 export function openLeaderboard(){void board();}
 export async function showResult(p:RunPayload,next:()=>void,replay?:()=>void){
- const score=levelScore({...p,maxEchoes:LEVEL_ECHOES[p.levelId-1]});open(t('account.levelComplete',{score}));
+ const score=levelScore({...p,maxEchoes:maxEchoesForLevel(p.levelId,p.difficulty)});open(t('account.levelComplete',{score}));
  const summary=message(t('account.savingResult'));
  let seconds=8;let timer:ReturnType<typeof setInterval>|null=null;
  const countdown=message(t('result.nextIn',{s:seconds}));

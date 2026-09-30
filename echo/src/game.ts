@@ -1,10 +1,12 @@
 import { Entity, GameState, Man, Lever, Door, TutorialBox, TutorialTarget, Laser, Plate, Crystal, Prism, ReflectedLaser } from './types';
 import { drawUnmirroredText, isPinching } from './utils';
-import { LEVELS } from './levels';
+import { LEVELS, getLevelConfig } from './levels';
+import { recordedHands } from './hands';
 import { playSfx } from './audio';
 import { t } from './i18n';
 
 export const gameState: GameState = {
+    difficulty: 'hard', livePlay: false, winTimeLeftMs: null, winEchoesUsed: 0,
     deaths: 0, resets: 0, attemptStart: 0,
     mode: 'TUTORIAL', 
     tutorialStep: 1,
@@ -109,20 +111,52 @@ function grab(object: Entity, objectId: ReplayObject, agentId: string): void {
     playSfx('grab');
 }
 
-export function recordingTarget(handCount: number): number {
-    const level = LEVELS[gameState.currentLevel - 1];
-    const hands = handCount >= 2 ? 2 : 1;
-    const tasks = (level.levers?.length ?? (level.lever ? 1 : 0)) + Number(!!level.plate) + Number(!!level.prism) + 1;
-    return Math.min(level.maxEchoes || 1, Math.max(level.minEchoes || 1, Math.ceil((tasks - hands) / hands)));
+export function getActiveLevel() {
+    return getLevelConfig(gameState.currentLevel, gameState.difficulty);
 }
 
-export function playingTimeLeft(): number {
+export function beginRecording(now: number, handCount: number): void {
+    if (!gameState.attemptStart) gameState.attemptStart = now;
+    gameState.mode = 'RECORDING';
+    gameState.livePlay = false;
+    gameState.recordStartTime = now;
+    gameState.echoIndex = 0;
+    gameState.recordedEchoes = [[]];
+    gameState.frames = [];
+    gameState.currentFrame = 0;
+    resetLevel();
+    gameState.recordingHands = gameState.difficulty === 'hard' && handCount >= 2 ? 2 : 1;
+    gameState.maxEchoes = recordingTarget(gameState.recordingHands);
+}
+
+export function beginLivePlay(now: number): void {
+    if (!gameState.attemptStart) gameState.attemptStart = now;
+    gameState.mode = 'PLAYING';
+    gameState.livePlay = true;
+    gameState.playStartTime = now;
+    gameState.echoIndex = 0;
+    gameState.recordedEchoes = [];
+    gameState.frames = [];
+    gameState.currentFrame = 0;
+    resetLevel();
+}
+
+export function recordingTarget(handCount: number): number {
+    const level = getActiveLevel();
+    const hands = gameState.difficulty === 'hard' && handCount >= 2 ? 2 : 1;
+    const tasks = (level.levers?.length ?? (level.lever ? 1 : 0)) + Number(!!level.plate) + Number(!!level.prism) + 1;
+    return Math.min(level.maxEchoes || 1, Math.max(level.minRecordings || 1, Math.ceil((tasks - hands) / hands)));
+}
+
+export function playingTimeLeft(now = Date.now()): number {
+    if (gameState.winTimeLeftMs !== null) return gameState.winTimeLeftMs;
+    if (gameState.livePlay) return Math.max(0, gameState.RECORD_DURATION - (now - gameState.playStartTime));
     const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
     return Math.max(0, gameState.RECORD_DURATION * (1 - gameState.currentFrame / maxFrames));
 }
 
-// Each level needs active help from the recorded past, not just a nonempty
-// recording. Both hands of one clone count as one past self.
+// Informational helper count; the door only checks physical puzzle conditions.
+// Both hands of one clone count as one past self.
 export function activeEchoCount(): number {
     const owners = [prism?.grabbedBy, plate?.grabbedBy, ...levers.map(object => object.grabbedBy)];
     return new Set(owners.flatMap(owner => {
@@ -248,13 +282,14 @@ export function triggerManDeath(message: string = t('death.default')) {
     spawnBurnExplosion(man.x, man.y);
     deathBanner = { text: message, until: now + 1600 };
 
-    const lvl = LEVELS[Math.min(gameState.currentLevel - 1, LEVELS.length - 1)];
+    const lvl = getActiveLevel();
     man.x = lvl.man.x;
     man.y = lvl.man.y;
     man.grabbedBy = null;
 
     if (gameState.mode === 'PLAYING') {
         gameState.currentFrame = 0;
+        if (gameState.livePlay) gameState.playStartTime = now;
         if (lvl.plate && plate) {
             plate.x = lvl.plate.x;
             plate.y = lvl.plate.y;
@@ -273,9 +308,12 @@ export function triggerManDeath(message: string = t('death.default')) {
 }
 
 export function resetLevel() {
+    gameState.winTimeLeftMs = null;
+    gameState.winEchoesUsed = 0;
+    if (gameState.mode === 'IDLE' || gameState.mode === 'TUTORIAL') gameState.livePlay = false;
     if (gameState.mode === 'IDLE' || gameState.mode === 'TUTORIAL') gameState.recordingHands = 1;
     const levelIndex = Math.min(gameState.currentLevel - 1, LEVELS.length - 1);
-    const lvl = LEVELS[levelIndex];
+    const lvl = getLevelConfig(levelIndex + 1, gameState.difficulty);
     gameState.maxEchoes = lvl.maxEchoes || 1;
     man = { x: lvl.man.x, y: Math.min(lvl.man.y, 0.8), grabbedBy: null, color: '#facc15' };
     
@@ -402,8 +440,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     ctx.strokeRect(doorX, doorY, doorW, doorH);
     
     drawUnmirroredText(ctx, door.open ? t('canvas.exitOpen') : t('canvas.locked'), doorX + doorW/2, doorY - 10, '24px sans-serif', 'white');
-    const requiredEchoes = LEVELS[gameState.currentLevel - 1].minEchoes || 1;
-    drawUnmirroredText(ctx, t('canvas.echoLock', { active: activeEchoCount(), total: requiredEchoes }),
+    drawUnmirroredText(ctx, t('canvas.echoCount', { active: activeEchoCount() }),
         doorX + doorW/2, doorY + doorH + 24, 'bold 16px sans-serif', '#06b6d4');
 
     // Laser (Vertical beam)
@@ -906,6 +943,8 @@ export function evaluateRules() {
             let t = 0;
             if (gameState.mode === 'RECORDING') {
                 t = (Date.now() - gameState.recordStartTime) / 1000;
+            } else if (gameState.mode === 'PLAYING' && gameState.livePlay) {
+                t = (Date.now() - gameState.playStartTime) / 1000;
             } else if (gameState.mode === 'PLAYING') {
                 const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
                 const progress = maxFrames > 0 ? (gameState.currentFrame / maxFrames) : 0;
@@ -1010,9 +1049,8 @@ export function evaluateRules() {
         }
     }
 
-    // Door unlocking logic: requires lever (if present) AND crystal charged (if present)
-    door.open = levers.every(l => l.active) && (!crystal || crystal.charged)
-        && activeEchoCount() >= (LEVELS[gameState.currentLevel - 1].minEchoes || 1);
+    // Physical puzzle conditions apply equally to live and recorded hands.
+    door.open = levers.every(l => l.active) && (!crystal || crystal.charged);
 
     // Hazard collision & Death mechanics
     let manHitByLaser = false;
@@ -1042,7 +1080,11 @@ export function evaluateRules() {
     // Win condition
     if (door.open) {
         if (Math.abs(man.x - door.x) < door.width/2 && Math.abs(man.y - door.y) < door.height/2) {
-            if (gameState.mode === 'PLAYING') {
+            if (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING') {
+                gameState.winTimeLeftMs = gameState.mode === 'RECORDING'
+                    ? Math.max(0, gameState.RECORD_DURATION - (Date.now() - gameState.recordStartTime)) : playingTimeLeft();
+                const echoes = gameState.mode === 'RECORDING' ? gameState.recordedEchoes.slice(0, gameState.echoIndex) : gameState.recordedEchoes;
+                gameState.winEchoesUsed = echoes.filter(echo => echo.some(frame => recordedHands(frame).some(Boolean))).length;
                 gameState.mode = 'WON';
                 gameState.baseInstruction = t('win.instructionSingle');
                 playSfx('win');

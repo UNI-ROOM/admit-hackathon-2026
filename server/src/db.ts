@@ -69,6 +69,8 @@ export async function openDatabase(connectionString: string, schema = 'public') 
           echoes_used INTEGER, deaths INTEGER, resets INTEGER, created_at BIGINT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS runs_user_level ON runs(user_id, level_id);
+        ALTER TABLE runs ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'hard'
+          CHECK (difficulty IN ('easy', 'hard'));
         CREATE TABLE IF NOT EXISTS progress (
           user_id TEXT PRIMARY KEY REFERENCES users(id), max_level INTEGER NOT NULL DEFAULT 1,
           tutorial_done INTEGER NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL

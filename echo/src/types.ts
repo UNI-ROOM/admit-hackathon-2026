@@ -1,4 +1,5 @@
 import type { HandLandmarks } from './hands';
+import type { Difficulty } from '../../shared/score';
 
 export type EchoFrame = { hands: [HandLandmarks | null, HandLandmarks | null] } | HandLandmarks | null;
 
@@ -77,6 +78,10 @@ export interface ReflectedLaser {
 }
 
 export interface GameState {
+    difficulty: Difficulty;
+    livePlay: boolean;
+    winTimeLeftMs: number | null;
+    winEchoesUsed: number;
     mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON';
     tutorialStep: number;
     deaths: number;
@@ -117,7 +122,7 @@ export interface LevelConfig {
     crystal?: { x: number, y: number, width: number, height: number };
     prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
     maxEchoes?: number;
-    minEchoes?: number;
+    minRecordings?: number;
     hintIdle?: string;
     hintRecording?: string | string[];
     hintPlaying?: string;

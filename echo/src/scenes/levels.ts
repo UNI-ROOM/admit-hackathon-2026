@@ -4,8 +4,8 @@
 // and the in-game pause panel can reuse them without a circular import on
 // main.ts.
 
-import { LEVELS } from '../levels';
-import { LEVEL_ECHOES } from '../../../shared/score';
+import { LEVELS, getLevelConfig } from '../levels';
+import type { Difficulty } from '../../../shared/score';
 import { api } from '../api';
 import { getSettings } from '../settings';
 import { gameState, resetLevel } from '../game';
@@ -34,8 +34,10 @@ function setHtml(id: string, html: string): void {
 // --- Shared level/tutorial entry helpers (also used by scenes/pause.ts) ---
 
 export function applyIdleHud(levelIndex: number): void {
-    const config = LEVELS[levelIndex - 1];
-    setText('level-title', config?.title || '');
+    const config = getLevelConfig(levelIndex, gameState.difficulty);
+    setText('level-title', `${config?.title || ''} · ${t(`difficulty.${gameState.difficulty}`)}`);
+    const actions = document.getElementById('round-actions');
+    if (actions) actions.hidden = false;
     const modeIndicator = document.getElementById('mode-indicator');
     if (modeIndicator) {
         modeIndicator.innerText = t('mode.idle');
@@ -56,7 +58,8 @@ function resetRunCounters(): void {
     gameState['wonTimeoutSet'] = false;
 }
 
-export function goToLevel(levelIndex: number): void {
+export function goToLevel(levelIndex: number, difficulty: Difficulty = gameState.difficulty): void {
+    gameState.difficulty = difficulty;
     resetRunCounters();
     gameState.currentLevel = levelIndex;
     gameState.mode = 'IDLE';
@@ -77,6 +80,8 @@ export function goToTutorial(): void {
     resetRunCounters();
     gameState.currentLevel = 1;
     gameState.mode = 'TUTORIAL';
+    const actions = document.getElementById('round-actions');
+    if (actions) actions.hidden = true;
     gameState.tutorialStep = 1;
     resetLevel();
     gameState.baseInstruction = t('tutorial.step1.instruction');
@@ -141,17 +146,12 @@ function render(): void {
         name.className = 'level-card-name';
         name.textContent = levelName(n);
 
-        const echoCount = LEVEL_ECHOES[idx] ?? 1;
-        const echoes = document.createElement('div');
-        echoes.className = 'level-card-echoes';
-        echoes.textContent = `👻 ${echoCount} ${echoCount === 1 ? t('levels.echo') : t('levels.echoes')}`;
-
         const best = document.createElement('div');
         best.className = 'level-card-best';
         const bestScore = sessionInfo?.best?.[String(n)];
         best.textContent = bestScore != null ? t('levels.best', { score: bestScore }) : t('levels.bestNone');
 
-        card.append(num, name, echoes, best);
+        card.append(num, name, best);
 
         if (locked) {
             const lock = document.createElement('div');
@@ -159,7 +159,15 @@ function render(): void {
             lock.textContent = '🔒';
             card.append(lock);
         } else {
-            card.append(button(t('levels.play'), () => goToLevel(n)));
+            for (const difficulty of ['easy', 'hard'] as const) {
+                const option = document.createElement('div');
+                option.className = 'difficulty-option';
+                const play = button(t(`levels.${difficulty}`), () => goToLevel(n, difficulty));
+                const description = document.createElement('p');
+                description.textContent = t(`levels.${difficulty}${n}`);
+                option.append(play, description);
+                card.append(option);
+            }
         }
 
         grid.append(card);
@@ -172,7 +180,10 @@ function render(): void {
         button(t('levels.tutorial'), () => goToTutorial())
     );
 
-    container.append(heading, grid, nav);
+    const hint = document.createElement('p');
+    hint.className = 'levels-hint';
+    hint.textContent = t('levels.difficultyHint');
+    container.append(heading, hint, grid, nav);
 }
 
 render();

@@ -5,13 +5,14 @@ import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } f
 import {
     gameState, man, levers, tutorialBox, tutorialTarget,
     resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
-    getAgentColor, plate, prism, deathBanner, recordingTarget, playingTimeLeft
+    getAgentColor, plate, prism, deathBanner, recordingTarget, playingTimeLeft,
+    getActiveLevel, beginRecording, beginLivePlay
 } from './game';
-import { LEVELS } from './levels';
+import { LEVELS, getLevelConfig } from './levels';
 import type { EchoFrame } from './types';
 import { playSfx, unlockAudioContext } from './audio';
 import { t } from './i18n';
-import { LiveHandTracker, snapshotHands, recordedHands, type HandResults } from './hands';
+import { LiveHandTracker, snapshotHands, recordedHands, playableHands, type HandResults } from './hands';
 import { getSettings, subscribe as subscribeSettings } from './settings';
 import { show, current, onEnterGame } from './scenes/router';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
@@ -35,7 +36,7 @@ const instruction = document.getElementById('instruction')!;
 let wonTimeout: any = null;
 
 function getIdleInstruction(level: number): string {
-    const config = LEVELS[level - 1];
+    const config = getLevelConfig(level, gameState.difficulty);
     return config?.hintIdle || t('idle.instructionDefault');
 }
 
@@ -70,8 +71,40 @@ function replayFrame(frame: EchoFrame | undefined, echoIndex: number): void {
     }
 }
 
+let latestHandCount = 0;
+const roundActions = document.getElementById('round-actions');
+const recordButton = document.getElementById('record-button');
+const playButton = document.getElementById('play-button');
+if (recordButton) { recordButton.textContent = t('round.record'); recordButton.onclick = () => startRound('record'); }
+if (playButton) { playButton.textContent = t('round.play'); playButton.onclick = () => startRound('play'); }
+
+function startRound(action: 'record' | 'play'): void {
+    if (current() !== 'game' || gameState.mode !== 'IDLE' || isPaused() || panelOpen()) return;
+    if (wonTimeout) clearTimeout(wonTimeout);
+    wonTimeout = null;
+    gameState.wonTimeoutSet = false;
+    const config = getActiveLevel();
+    if (action === 'record') {
+        beginRecording(Date.now(), latestHandCount);
+        modeIndicator.innerText = gameState.maxEchoes > 1
+            ? t('recording.startMulti', { i: 1, max: gameState.maxEchoes }) : t('recording.start');
+        modeIndicator.className = 'status-box text-2xl font-bold text-red-500 recording';
+        gameState.baseInstruction = Array.isArray(config.hintRecording)
+            ? config.hintRecording[0] : config.hintRecording || t('recording.continueDefault');
+    } else {
+        beginLivePlay(Date.now());
+        modeIndicator.innerText = t('playing.liveTick', { time: 10 });
+        modeIndicator.className = 'status-box text-2xl font-bold text-cyan-400 playing';
+        gameState.baseInstruction = t(`round.liveHint${gameState.currentLevel}`);
+    }
+    instruction.innerHTML = gameState.baseInstruction;
+    if (roundActions) roundActions.hidden = true;
+}
+
 function onResults(results: HandResults) {
-    const liveHands = handTracker.update(results);
+    const trackedHands = handTracker.update(results);
+    const liveHands = playableHands(trackedHands, gameState.difficulty);
+    latestHandCount = liveHands.filter(Boolean).length;
     const liveHand = liveHands[0] || liveHands[1];
     const liveAgent = liveHands[0] ? 'live' : 'live_1';
     const twoHands = liveHands.every(Boolean);
@@ -91,6 +124,7 @@ function onResults(results: HandResults) {
         return;
     }
 
+    if (roundActions) roundActions.hidden = gameState.mode !== 'IDLE';
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -130,7 +164,7 @@ function onResults(results: HandResults) {
                 restartCurrentLevel();
             };
             wonTimeout = setTimeout(nextLevel, 8000);
-            void showResult({ levelId: gameState.currentLevel, timeLeftMs: playingTimeLeft(), echoesUsed: gameState.recordedEchoes.filter(e => e.some(frame => recordedHands(frame).some(Boolean))).length, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
+            void showResult({ levelId: gameState.currentLevel, timeLeftMs: playingTimeLeft(), echoesUsed: gameState.winEchoesUsed, difficulty: gameState.difficulty, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
         }
         return;
     }
@@ -203,29 +237,7 @@ function onResults(results: HandResults) {
         }
     } else if (gameState.mode === 'IDLE') {
         if (liveHands.some(hand => hand && isOpenPalm(hand))) {
-            if (!gameState.attemptStart) gameState.attemptStart = now;
-            gameState.mode = 'RECORDING';
-            gameState.recordStartTime = now;
-            gameState.echoIndex = 0;
-            gameState.recordedEchoes = [[]];
-            gameState.frames = [];
-            resetLevel();
-            gameState.recordingHands = twoHands ? 2 : 1;
-            gameState.maxEchoes = recordingTarget(gameState.recordingHands);
-
-            if (gameState.maxEchoes > 1) {
-                modeIndicator.innerText = t('recording.startMulti', { i: 1, max: gameState.maxEchoes });
-            } else {
-                modeIndicator.innerText = t('recording.start');
-            }
-            modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
-            const config = LEVELS[gameState.currentLevel - 1];
-            if (Array.isArray(config?.hintRecording)) {
-                gameState.baseInstruction = config.hintRecording[0] || t('recording.continueDefault');
-            } else {
-                gameState.baseInstruction = (config?.hintRecording as string) || t('recording.continueDefault');
-            }
-            instruction.innerHTML = gameState.baseInstruction;
+            startRound('record');
         }
     }
     else if (gameState.mode === 'RECORDING') {
@@ -249,7 +261,7 @@ function onResults(results: HandResults) {
                 gameState.maxEchoes = targetRecordings;
 
                 modeIndicator.innerText = t('recording.startMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
-                const config = LEVELS[gameState.currentLevel - 1];
+                const config = getActiveLevel();
                 if (Array.isArray(config?.hintRecording) && config.hintRecording.length > gameState.echoIndex) {
                     gameState.baseInstruction = config.hintRecording[gameState.echoIndex];
                 } else {
@@ -264,7 +276,7 @@ function onResults(results: HandResults) {
 
                 modeIndicator.innerText = t('mode.loop');
                 modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
-                const config = LEVELS[gameState.currentLevel - 1];
+                const config = getActiveLevel();
                 gameState.baseInstruction = config?.hintPlaying || t('playing.defaultHint');
                 instruction.innerHTML = gameState.baseInstruction;
             }
@@ -291,8 +303,12 @@ function onResults(results: HandResults) {
             replayFrame(echo?.[gameState.currentFrame], i);
         }
 
-        gameState.currentFrame++;
-        if (gameState.currentFrame >= maxFrames) {
+        if (gameState.livePlay) {
+            modeIndicator.innerText = t('playing.liveTick', { time: Math.ceil(playingTimeLeft(now) / 1000) });
+        } else {
+            gameState.currentFrame++;
+        }
+        if (gameState.livePlay ? playingTimeLeft(now) <= 0 : gameState.currentFrame >= maxFrames) {
             gameState.mode = 'IDLE';
             gameState.recordedEchoes = [];
             gameState.echoIndex = 0;
@@ -435,8 +451,11 @@ async function ensureCamera() {
     }
     setCameraStarted();
 }
-onEnterGame(() => { void ensureCamera(); });
-setUiContext(() => current() !== 'game' || !!document.querySelector('dialog[open]'));
+onEnterGame(() => {
+    hands.setOptions({ maxNumHands: gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL' ? 1 : 2 });
+    void ensureCamera();
+});
+setUiContext(() => current() !== 'game' || gameState.mode === 'IDLE' || !!document.querySelector('dialog[open]'));
 
 show('menu');
 void ensureCamera();

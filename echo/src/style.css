@@ -206,3 +206,21 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .settings-panel button.is-on, .account-panel button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .settings-panel h2 { color: var(--fg); }
 .settings-panel p { color: var(--accent-2); font-size: 13px; }
+
+/* Difficulty choices and optional echo recording */
+.difficulty-option { text-align: left; }
+.difficulty-option .menu-btn { font-size: 10px; letter-spacing: 0; padding: 14px 8px; }
+.difficulty-option p { margin: 6px 0 4px; color: var(--muted); font: 13px/1.5 system-ui; }
+.levels-hint { margin: -12px 0 0; max-width: 720px; text-align: center; color: var(--muted); font: 14px/1.6 system-ui; }
+.round-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.round-actions[hidden] { display: none; }
+.account-hud[hidden] { display: none; }
+.round-actions .hud-menu-btn { background: rgba(0, 0, 0, .9); min-height: 44px; }
+#record-button { border-color: var(--danger); }
+#play-button { border-color: var(--accent); }
+@media (max-width: 900px) {
+    .levels-scene { justify-content: flex-start; }
+    .levels-nav { flex-wrap: wrap; justify-content: center; }
+    #ui-layer { padding: 1rem; }
+    .instruction-box { font-size: 1rem; padding: 12px; }
+}

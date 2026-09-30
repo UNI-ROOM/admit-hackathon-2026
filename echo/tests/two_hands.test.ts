@@ -1,14 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LiveHandTracker, snapshotHands, recordedHands } from '../src/hands';
+import { LiveHandTracker, snapshotHands, recordedHands, playableHands } from '../src/hands';
 import { gameState, resetLevel, handleDragAndDrop, recordingTarget, playingTimeLeft,
-    evaluateRules, activeEchoCount, man, plate, prism, levers, lever, door, crystal } from '../src/game';
+    evaluateRules, activeEchoCount, getActiveLevel, beginRecording, beginLivePlay, man, plate, prism, levers, lever, door, crystal } from '../src/game';
 
 const ctx = new Proxy({} as CanvasRenderingContext2D, { get: () => () => {}, set: () => true });
 const hand = (x: number, y: number) => Array.from({ length: 21 }, () => ({ x, y, z: 0 }));
 const drag = (landmarks: ReturnType<typeof hand> | null, agent: string) => handleDragAndDrop(ctx, 1000, 1000, landmarks, agent);
 
 function recording(level: number) {
+    gameState.difficulty = 'hard';
+    gameState.livePlay = false;
     gameState.currentLevel = level;
     gameState.mode = 'RECORDING';
     gameState.recordedEchoes = [[]];
@@ -110,7 +112,7 @@ test('one or two live hands determine required loops without eliminating recordi
 });
 
 for (const level of [1, 2, 3]) {
-    test(`level ${level} cannot open its exit using only live hands`, () => {
+    test(`level ${level} opens its exit as soon as live hands satisfy its puzzle`, () => {
         recording(level);
         gameState.mode = 'PLAYING';
         gameState.recordedEchoes = [];
@@ -120,17 +122,17 @@ for (const level of [1, 2, 3]) {
         if (plate) plate.grabbedBy = 'live_1';
         evaluateRules();
         assert.equal(activeEchoCount(), 0);
-        assert.equal(door.open, false);
+        assert.equal(door.open, true);
     });
 }
 
-test('two hands of one past self count as one echo; level 3 needs two different past selves', () => {
+test('past helper count distinguishes echoes without restricting door opening', () => {
     recording(3);
     gameState.mode = 'PLAYING';
     levers.forEach((object, index) => { object.handleY = object.y + 0.2; object.grabbedBy = index ? 'ghost_0_1' : 'ghost_0'; });
     evaluateRules();
     assert.equal(activeEchoCount(), 1);
-    assert.equal(door.open, false);
+    assert.equal(door.open, true);
     plate!.grabbedBy = 'ghost_1';
     evaluateRules();
     assert.equal(activeEchoCount(), 2);
@@ -150,4 +152,55 @@ test('score timer uses playback progress of the full two-hand recording', () => 
     gameState.recordedEchoes = [Array.from({ length: 600 }, () => snapshotHands([null, null]))];
     gameState.currentFrame = 150;
     assert.equal(playingTimeLeft(), 7500);
+});
+
+
+test('easy uses the original one-hand puzzles and ignores a simultaneous second hand', () => {
+    const first = hand(.2, .5), second = hand(.8, .5);
+    assert.deepEqual(playableHands([first, second], 'easy'), [first, null]);
+    assert.deepEqual(playableHands([null, second], 'easy'), [second, null]);
+    assert.deepEqual(playableHands([first, second], 'hard'), [first, second]);
+    for (const [level, leverCount, loops] of [[1, 0, 1], [2, 0, 1], [3, 1, 2]]) {
+        gameState.currentLevel = level;
+        gameState.difficulty = 'easy';
+        beginRecording(1000, 2);
+        assert.equal(levers.length, leverCount);
+        assert.equal(gameState.maxEchoes, loops);
+        assert.equal(gameState.recordingHands, 1);
+    }
+});
+
+test('live play starts without recording, uses a real timer and resets cleanly', () => {
+    gameState.difficulty = 'hard'; gameState.currentLevel = 3;
+    beginLivePlay(1000);
+    assert.equal(gameState.mode, 'PLAYING');
+    assert.equal(gameState.livePlay, true);
+    assert.deepEqual(gameState.recordedEchoes, []);
+    assert.equal(playingTimeLeft(3500), 7500);
+    assert.equal(playingTimeLeft(12000), 0);
+    gameState.mode = 'IDLE'; resetLevel();
+    assert.equal(gameState.livePlay, false);
+});
+
+test('a recording can win immediately without replaying the unfinished echo', () => {
+    gameState.difficulty = 'hard'; gameState.currentLevel = 3;
+    beginRecording(Date.now(), 2);
+    gameState.recordedEchoes[0].push(snapshotHands([hand(.85,.5), hand(.2,.5)]));
+    levers.forEach(object => { object.handleY = object.y + .2; object.grabbedBy = 'live'; });
+    man.x = door.x; man.y = door.y;
+    evaluateRules();
+    assert.equal(gameState.mode, 'WON');
+    assert.equal(gameState.winEchoesUsed, 0);
+    assert.ok(playingTimeLeft() > 9000);
+});
+
+test('an unfinished physical puzzle keeps the door closed in both difficulties', () => {
+    for (const difficulty of ['easy', 'hard'] as const) for (const level of [1, 3]) {
+        gameState.difficulty = difficulty; gameState.currentLevel = level;
+        beginLivePlay(Date.now());
+        assert.equal(getActiveLevel().id, level);
+        evaluateRules();
+        assert.equal(door.open, false);
+        assert.equal(gameState.mode, 'PLAYING');
+    }
 });

@@ -35,7 +35,7 @@ npm run dev
 
 ---
 
-### 🧪 Запуск Unit-тестов движка (59/59 passing, из них 16 — движковых)
+### 🧪 Запуск Unit-тестов движка (63/63 passing, из них 16 — движковых)
 Встроенный TypeScript test runner без сторонних тяжелых фреймворков:
 ```bash
 cd echo
@@ -48,9 +48,13 @@ npx --yes tsx --test
 
 ### 👐 Record one or two hands — cooperate with the past
 
-Show an open palm to start a ten-second recording. Both hands are recorded independently and replayed by your echo in the next loop. Adding a second hand never cancels or skips RECORD. Each hand grabs its own object with a pinch; recorded objects stay reserved for their original past hand.
+Choose **Easy · 1 hand** or **Hard · 2 hands** on each level card. Easy restores the original campaign: prism, moving shield, then one lever with a shield. Hard adds a lever to Level 2 and a second lever to Level 3, with independent pinch control for both hands.
 
-Every exit needs active help from an echo. Level 1 needs the recorded prism; Level 2 combines a lever, moving shield and rescue; Level 3 requires two levers, a moving shield and two different past selves. With one live hand, the levels use 1/2/3 recordings; with two hands, 1/1/2. Both recorded hands of one echo still count as one past self. Losing a hand releases only its object, and its absence is also recorded.
+Choose **PLAY NOW** to start a ten-second live attempt without recording, or **RECORD ECHO** (also triggered by an open palm) to capture past hands. Easy records one hand; Hard records both. The next loop replays their actions, and recorded objects stay reserved for the original past hand. Adding a second hand never cancels a recording.
+
+The exit checks the puzzle itself: the crystal is charged and every lever present is held down. It does not require a fixed number of echoes. Reaching an open exit also wins during RECORD, without waiting for the recording to end. An unfinished recording is not counted as a replayed echo in the score.
+
+For full recording sequences, Easy uses 1/1/2 loops; Hard uses 1/1/2 with two hands (1/2/3 with one). Recording remains useful when you need more helping hands. Losing a hand releases only its own object and is preserved in the recording.
 
 The game is built on the concept of **"cooperating with your past self"**: you record a stretch of time while performing one action (e.g. holding a shield against a deadly laser), and on the next loop your clone replays that movement with millisecond precision while you carry out the second part of the task.
 
@@ -77,9 +81,9 @@ flowchart LR
    - The player aims the beam at a photon crystal until it's fully charged (100%), while the clone helps hold the components in place.
 3. **Level 2: Beam & Shield (Dynamic Defense)**:
    - A continuously oscillating deadly laser blocks the path to the exit.
-   - Hold the door lever and follow the moving laser with a shield. Your past hands replay these actions while you lead the little guy to the exit.
-4. **Level 3: Multi-Echo (Grand finale: at least 2 past selves)**:
-   - Coordinate two gravity levers, a moving shield and the rescue. At least two different echoes must actively help. One hand records three loops; two hands record two loops, with both past hands replayed independently.
+   - Follow the moving laser with a shield; Hard mode also adds a door lever. Echoes can replay these actions while you lead the little guy to the exit.
+4. **Level 3: Multi-Echo (Grand finale)**:
+   - Coordinate levers, a moving shield and the rescue. Hard mode offers two levers and records both hands; Easy uses the original single lever. Echoes can help with the simultaneous tasks.
 
 ---
 
@@ -145,12 +149,12 @@ flowchart LR
 
 ## 🧪 Тестирование и Надежность
 
-- **59/59 Unit-тестов** (16 — движковых): Покрывают распознавание жестов (включая новый 4-й жест «указательный палец»), подавление дребезга (`StateStabilizer`), арбитраж мульти-агентов, оптику преломления и логику условий победы.
+- **63/63 Unit-тестов** (16 — движковых): Покрывают распознавание жестов (включая новый 4-й жест «указательный палец»), подавление дребезга (`StateStabilizer`), арбитраж мульти-агентов, оптику преломления и логику условий победы.
 - **Строгий TypeScript**: Никаких `any`-кастов в игровой логике, строгая типизация состояний (`mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON'`).
 - **StateStabilizer**: Алгоритм фильтрации шума камеры, требующий `N` устойчивых кадров для исключения ложных переключений состояний.
 
 ```bash
-# Запуск тестов (показан вывод движкового суита, всего 59 тестов):
+# Запуск тестов (показан вывод движкового суита, всего 63 тестов):
 $ npm test --prefix echo
 
   ✔ 1. Gesture: isOpenPalm returns true when 4 fingers extended above joints
@@ -170,9 +174,9 @@ $ npm test --prefix echo
   ✔ 15. Gesture: isPointing returns true when index finger is extended and others are curled
   ✔ 16. Gesture: isPointing returns false when fingers are open, hand is a fist or landmarks are malformed
 
-ℹ tests 59
+ℹ tests 63
 ℹ suites 1
-ℹ pass 59
+ℹ pass 63
 ℹ fail 0
 ```
 

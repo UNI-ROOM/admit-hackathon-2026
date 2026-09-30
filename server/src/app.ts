@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { type Database, type Queries } from './db';
-import { LEVEL_ECHOES, levelScore } from '../../shared/score';
+import { LEVEL_ECHOES, levelScore, maxEchoesForLevel } from '../../shared/score';
 
 type User = { id: string; email: string | null; nickname: string };
 type BoardRow = { id: string; nickname: string; total: number; levels: number };
@@ -198,16 +198,17 @@ export function createApp({ db, sendCode, production = false, origin, now = Date
   app.post('/api/runs', async c => {
     const u = c.get('user'); if (!u) return c.json({ error: 'unauthorized' }, 401);
     const p = z.object({
+      difficulty: z.enum(['easy', 'hard']).default('hard'),
       levelId: z.number().int().min(1).max(LEVEL_ECHOES.length), timeLeftMs: z.number().finite(),
       echoesUsed: z.number().int().min(0), deaths: z.number().int().min(0).max(100000), resets: z.number().int().min(0).max(100000),
     }).parse(await c.req.json());
-    const maxEchoes = LEVEL_ECHOES[p.levelId - 1];
+    const maxEchoes = maxEchoesForLevel(p.levelId, p.difficulty);
     p.timeLeftMs = Math.round(Math.max(0, Math.min(10000, p.timeLeftMs)));
     p.echoesUsed = Math.min(maxEchoes, p.echoesUsed);
     const score = levelScore({ ...p, maxEchoes });
     await db.transaction(async tx => {
-      await tx.run(`INSERT INTO runs (user_id,level_id,score,time_left_ms,echoes_used,deaths,resets,created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [u.id,p.levelId,score,p.timeLeftMs,p.echoesUsed,p.deaths,p.resets,now()]);
+      await tx.run(`INSERT INTO runs (user_id,level_id,score,time_left_ms,echoes_used,deaths,resets,created_at,difficulty)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [u.id,p.levelId,score,p.timeLeftMs,p.echoesUsed,p.deaths,p.resets,now(),p.difficulty]);
       await tx.run('UPDATE progress SET max_level=GREATEST(max_level,$1),updated_at=$2 WHERE user_id=$3',
         [Math.min(p.levelId + 1, LEVEL_ECHOES.length), now(), u.id]);
     });

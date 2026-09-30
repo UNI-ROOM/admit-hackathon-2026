@@ -5,6 +5,10 @@ export interface HandResults {
     multiHandedness?: { label: string; score: number }[];
 }
 
+export function playableHands(hands: [HandLandmarks | null, HandLandmarks | null], difficulty: import('../../shared/score').Difficulty): typeof hands {
+    return difficulty === 'easy' ? [hands[0] || hands[1], null] : hands;
+}
+
 export function snapshotHands(hands: [HandLandmarks | null, HandLandmarks | null]) {
     return { hands: hands.map(hand => hand ? hand.map(point => ({ ...point })) : null) as typeof hands };
 }

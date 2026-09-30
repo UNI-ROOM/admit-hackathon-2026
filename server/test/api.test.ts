@@ -127,3 +127,28 @@ test('invalid SQLite import rolls back every table',async t=>{
  }));
  assert.equal((await db.one('SELECT COUNT(*)::integer n FROM users'))!.n,0);
 });
+
+
+test('difficulty is validated, persisted and selects the matching echo bonus', async t => {
+ const s=await setup(t); const c=s.client(); await c('/session');
+ const run={levelId:3,timeLeftMs:5000,echoesUsed:1,deaths:0,resets:0};
+ assert.equal((await c('/runs',{...run,difficulty:'easy'})).body.score,1800);
+ assert.equal((await c('/runs',{...run,difficulty:'hard'})).body.score,2100);
+ assert.equal((await c('/runs',run)).body.score,2100);
+ assert.equal((await c('/runs',{...run,difficulty:'impossible'})).status,400);
+ const rows=await s.db.all('SELECT difficulty FROM runs ORDER BY id');
+ assert.deepEqual(rows.map(row=>row.difficulty),['easy','hard','hard']);
+});
+
+test('difficulty migration preserves legacy runs and can be repeated', async t => {
+ const db=await testDatabase(t);
+ const schema=(await db.one('SELECT current_schema() AS name'))!.name;
+ await db.run('ALTER TABLE runs DROP COLUMN difficulty');
+ await db.run("INSERT INTO users VALUES ('legacy-difficulty',NULL,'Guest',1)");
+ await db.run("INSERT INTO runs (user_id,level_id,score,created_at) VALUES ('legacy-difficulty',1,1500,1)");
+ for(let i=0;i<2;i++) {
+  const reopened=await openDatabase(process.env.TEST_DATABASE_URL || 'postgresql://echo_test:echo_test@127.0.0.1:55432/echo_test',schema);
+  try { assert.deepEqual(await reopened.one('SELECT score,difficulty FROM runs'),{score:1500,difficulty:'hard'}); }
+  finally { await reopened.close(); }
+ }
+});
