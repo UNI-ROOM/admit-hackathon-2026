@@ -1,7 +1,7 @@
 // Hand cursor for the whole interface: the index fingertip moves a cursor over
-// buttons; touch thumb to middle finger to click, or hold still for 1 s (dwell,
-// as taught in the tutorial). The index finger stays on target while clicking.
-// Mouse input keeps working alongside it.
+// buttons. Two ways to click: touch thumb to middle finger (instant, the index
+// finger stays on target), or hold the cursor on a button for 1 s (dwell, as
+// taught in the tutorial). Mouse input keeps working alongside it.
 import { isPointing, isThumbMiddleTouch } from '../utils';
 import { getSettings } from '../settings';
 import type { HandLandmarks } from '../hands';
@@ -12,6 +12,11 @@ const CLICK_COOLDOWN_MS = 600;
 // already covers the whole screen.
 const EDGE = 0.1;
 const SMOOTHING = 0.45;
+// A shaky hand briefly slipping off a button edge must not restart the dwell.
+const TARGET_GRACE_MS = 200;
+// After a click, dwell re-arms only once the cursor moves this far, so holding
+// still on a button (or a toggle that re-renders) doesn't click it again.
+const REARM_DISTANCE_PX = 40;
 
 const CLICKABLE = 'button, select, [data-dwell]';
 
@@ -25,12 +30,15 @@ document.body.append(cursor);
 let pos: { x: number; y: number } | null = null;
 let target: HTMLElement | null = null;
 let dwellStart = 0;
+let pending: { el: HTMLElement | null; since: number } | null = null;
+let dwellLock: { x: number; y: number } | null = null;
 let wasTouching = false;
 let lastClick = 0;
 let dialogsOnTop = -1;
 
-// Outside gameplay the cursor follows any visible hand; in gameplay it shows
-// only while pointing or clicking, so grabbing objects doesn't bring it up.
+// Outside gameplay the cursor follows any visible hand and dwell works with any
+// hand pose; in gameplay both need an explicit pointing gesture, so grabbing
+// objects neither shows the cursor nor clicks the HUD.
 let uiContext = () => true;
 export function setUiContext(fn: () => boolean): void { uiContext = fn; }
 
@@ -51,6 +59,7 @@ function keepOnTop(): void {
 }
 
 function setTarget(el: HTMLElement | null, now: number): void {
+    pending = null;
     if (el === target) return;
     target?.classList.remove('hand-hover');
     target = el;
@@ -58,9 +67,19 @@ function setTarget(el: HTMLElement | null, now: number): void {
     target?.classList.add('hand-hover');
 }
 
+function updateTarget(el: HTMLElement | null, now: number): void {
+    if (el === target) { pending = null; return; }
+    // Switch at once onto a first target or away from a removed one; otherwise
+    // only after the cursor has stayed off the current target for a moment.
+    if (!target || !target.isConnected) { setTarget(el, now); return; }
+    if (!pending || pending.el !== el) pending = { el, since: now };
+    if (now - pending.since >= TARGET_GRACE_MS) setTarget(el, now);
+}
+
 function activate(el: HTMLElement, now: number): void {
     lastClick = now;
     dwellStart = now;
+    if (pos) dwellLock = { ...pos };
     if (el instanceof HTMLSelectElement) {
         // Native dropdowns can't be driven by a synthetic click: cycle options.
         el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
@@ -84,7 +103,7 @@ export function handlePointer(hands: (HandLandmarks | null)[]): void {
     const touching = !!hand && isThumbMiddleTouch(hand, wasTouching);
 
     if (!hand || (!ui && !pointing && !touching)) {
-        show(false); setTarget(null, now); pos = null; wasTouching = false;
+        show(false); setTarget(null, now); pos = null; wasTouching = false; dwellLock = null;
         return;
     }
 
@@ -101,13 +120,18 @@ export function handlePointer(hands: (HandLandmarks | null)[]): void {
 
     const hit = document.elementFromPoint(pos.x, pos.y)?.closest<HTMLElement>(CLICKABLE) || null;
     const el = hit && !(hit as HTMLButtonElement).disabled ? hit : null;
-    setTarget(el, now);
+    updateTarget(el, now);
+    if (dwellLock && Math.hypot(pos.x - dwellLock.x, pos.y - dwellLock.y) > REARM_DISTANCE_PX) {
+        dwellLock = null;
+        dwellStart = now;
+    }
 
     const cooling = now - lastClick < CLICK_COOLDOWN_MS;
+    const canDwell = (ui || pointing) && !touching && !dwellLock && !cooling;
     let progress = 0;
     if (touching && !wasTouching && !cooling) {
         if (target?.isConnected) activate(target, now);
-    } else if (pointing && !touching && target && !cooling) {
+    } else if (canDwell && target?.isConnected) {
         progress = Math.min(1, (now - dwellStart) / DWELL_MS);
         if (progress >= 1) { activate(target, now); progress = 0; }
     }
