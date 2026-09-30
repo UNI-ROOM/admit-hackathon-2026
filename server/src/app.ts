@@ -17,6 +17,7 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const boardSQL = `SELECT u.id, u.nickname, SUM(b.best)::integer total, COUNT(*)::integer levels
   FROM (SELECT user_id, level_id, MAX(score) best FROM runs WHERE level_id <= ${LEVEL_ECHOES.length} GROUP BY user_id, level_id) b
   JOIN users u ON u.id=b.user_id GROUP BY u.id ORDER BY total DESC, u.id ASC`;
+const rankSQL = `SELECT id, total, levels, RANK() OVER (ORDER BY total DESC, id ASC)::integer rnk FROM (${boardSQL}) t`;
 
 export function createApp({ db, sendCode, production = false, origin, now = Date.now }: Options) {
   const app = new Hono<{ Variables: { user: User | null } }>();
@@ -33,7 +34,7 @@ export function createApp({ db, sendCode, production = false, origin, now = Date
   }
 
   async function newUser(tx: Queries): Promise<User> {
-    const u: User = { id: randomUUID(), email: null, nickname: `Гость-${randomInt(1000, 10000)}` };
+    const u: User = { id: randomUUID(), email: null, nickname: `Guest-${randomInt(1000, 10000)}` };
     await tx.run('INSERT INTO users VALUES ($1, $2, $3, $4)', [u.id, null, u.nickname, now()]);
     await tx.run('INSERT INTO progress (user_id, updated_at) VALUES ($1, $2)', [u.id, now()]);
     return u;
@@ -99,6 +100,13 @@ export function createApp({ db, sendCode, production = false, origin, now = Date
     return c.json(await snapshot(u));
   });
   app.get('/api/me', async c => c.get('user') ? c.json(await snapshot(c.get('user')!)) : c.json({ error: 'unauthorized' }, 401));
+
+  app.get('/api/me/rank', async c => {
+    const u = c.get('user'); if (!u) return c.json({ error: 'unauthorized' }, 401);
+    const rows = await db.all<{ id: string; total: number; levels: number; rnk: number }>(rankSQL);
+    const mine = rows.find(r => r.id === u.id);
+    return c.json({ rank: mine ? mine.rnk : null, total: mine?.total ?? 0, levels: mine?.levels ?? 0, players: rows.length });
+  });
 
   app.post('/api/auth/request', async c => {
     if (!c.get('user')) return c.json({ error: 'unauthorized' }, 401);

@@ -42,7 +42,7 @@ test('Multi-echo logic: maxEchoes is 2 for Level 3, 1 for Levels 1 and 2', () =>
     assert.strictEqual(lvl1.maxEchoes, 1, 'Level 1 maxEchoes must be 1');
     assert.strictEqual(lvl2.maxEchoes, 1, 'Level 2 maxEchoes must be 1');
     assert.strictEqual(lvl3.maxEchoes, 2, 'Level 3 maxEchoes must be 2');
-    assert.strictEqual(lvl3.title, 'Уровень 3: Мульти-Эхо', 'Level 3 title must be "Уровень 3: Мульти-Эхо"');
+    assert.strictEqual(lvl3.title, 'Level 3: Multi-Echo', 'Level 3 title must be "Level 3: Multi-Echo"');
 
     // Check runtime gameState behavior with resetLevel()
     gameState.currentLevel = 1;
@@ -59,9 +59,9 @@ test('Multi-echo logic: maxEchoes is 2 for Level 3, 1 for Levels 1 and 2', () =>
 });
 
 test('Multi-echo agent styling and naming (ghost_0, ghost_1, live)', () => {
-    assert.strictEqual(getAgentName('ghost_0'), 'Клон 1');
-    assert.strictEqual(getAgentName('ghost_1'), 'Клон 2');
-    assert.strictEqual(getAgentName('live'), 'Вы');
+    assert.strictEqual(getAgentName('ghost_0'), 'Clone 1');
+    assert.strictEqual(getAgentName('ghost_1'), 'Clone 2');
+    assert.strictEqual(getAgentName('live'), 'You');
 
     assert.strictEqual(getAgentColor('ghost_0'), '#06b6d4');
     assert.strictEqual(getAgentColor('ghost_1'), '#a855f7');
@@ -267,7 +267,7 @@ test('Tutorial step 4 wires the 4th gesture (index finger pointing) into the lev
     const mainPath = path.resolve(process.cwd(), 'src/main.ts');
     const mainCode = fs.readFileSync(mainPath, 'utf8');
     assert.match(mainCode, /isPointing/, 'main.ts should import and use isPointing gesture');
-    assert.match(mainCode, /ОБУЧЕНИЕ 4\/4/, 'main.ts should have the 4/4 tutorial step instruction');
+    assert.match(mainCode, /tutorial\.step4\.instruction/, 'main.ts should have the 4/4 tutorial step instruction');
     assert.match(mainCode, /pointingStabilizer/, 'main.ts should debounce the pointing gesture with StateStabilizer');
     assert.match(mainCode, /LEVELS\.map\(/, 'main.ts should build level HUD buttons from LEVELS');
 
@@ -279,7 +279,7 @@ test('Tutorial step 4 wires the 4th gesture (index finger pointing) into the lev
 test('Level 1 configuration: title, crystal, prism with direction left, door, and laser', () => {
     const lvl = LEVELS.find(l => l.id === 1);
     assert.ok(lvl, 'Level 1 must be defined in LEVELS');
-    assert.strictEqual(lvl.title, 'Уровень 1: Призма и Кристалл', 'Level 1 title should match');
+    assert.strictEqual(lvl.title, 'Level 1: Prism & Crystal', 'Level 1 title should match');
 
     // Crystal
     assert.ok(lvl.crystal, 'Level 1 must have a crystal config');

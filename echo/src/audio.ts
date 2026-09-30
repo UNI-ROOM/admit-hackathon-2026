@@ -20,6 +20,9 @@ export function unlockAudioContext(): void {
     if (ctx && ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
     }
+    if (musicEnabled) {
+        startMusic();
+    }
 }
 
 // Auto-unlock on first user gesture/interaction
@@ -30,6 +33,176 @@ if (typeof window !== 'undefined') {
         events.forEach(evt => window.removeEventListener(evt, unlocker));
     };
     events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true }));
+}
+
+// ---------------------------------------------------------------------------
+// SFX enable/disable
+// ---------------------------------------------------------------------------
+
+let sfxEnabled = true;
+
+export function setSfxEnabled(on: boolean): void {
+    sfxEnabled = on;
+}
+
+// ---------------------------------------------------------------------------
+// Procedural background music: two detuned oscillators through a lowpass
+// filter with an LFO (ambient pad) + a soft A-minor pentatonic arpeggio.
+// No audio files are used.
+// ---------------------------------------------------------------------------
+
+let musicEnabled = true;
+let musicPlaying = false;
+let musicMasterGain: GainNode | null = null;
+let padOsc1: OscillatorNode | null = null;
+let padOsc2: OscillatorNode | null = null;
+let padFilter: BiquadFilterNode | null = null;
+let padLfo: OscillatorNode | null = null;
+let padLfoGain: GainNode | null = null;
+let arpTimer: ReturnType<typeof setInterval> | null = null;
+
+const MUSIC_MASTER_LEVEL = 0.06;
+const MUSIC_FADE_SEC = 1.5;
+
+// A-minor pentatonic: A3, C4, D4, E4, G4, A4
+const ARP_NOTES = [220.0, 261.63, 293.66, 329.63, 392.0, 440.0];
+const ARP_INTERVAL_SEC = 0.8;
+
+function scheduleArpNote(ctx: AudioContext, destination: AudioNode): void {
+    const freq = ARP_NOTES[Math.floor(Math.random() * ARP_NOTES.length)];
+    const now = ctx.currentTime;
+    const dur = 0.6;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.5, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    osc.connect(gain);
+    gain.connect(destination);
+
+    osc.start(now);
+    osc.stop(now + dur);
+}
+
+export function startMusic(): void {
+    const ctx = getAudioContext();
+    if (!ctx || musicPlaying || !musicEnabled) return;
+    if (ctx.state === 'suspended') return; // wait for unlock
+
+    musicPlaying = true;
+
+    const now = ctx.currentTime;
+
+    musicMasterGain = ctx.createGain();
+    musicMasterGain.gain.setValueAtTime(0.0001, now);
+    musicMasterGain.gain.exponentialRampToValueAtTime(MUSIC_MASTER_LEVEL, now + MUSIC_FADE_SEC);
+    musicMasterGain.connect(ctx.destination);
+
+    // Ambient pad: two detuned oscillators -> lowpass filter with LFO
+    padFilter = ctx.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.frequency.setValueAtTime(800, now);
+    padFilter.Q.setValueAtTime(0.7, now);
+
+    padOsc1 = ctx.createOscillator();
+    padOsc1.type = 'sine';
+    padOsc1.frequency.setValueAtTime(110, now); // A2
+
+    padOsc2 = ctx.createOscillator();
+    padOsc2.type = 'triangle';
+    padOsc2.frequency.setValueAtTime(110, now);
+    padOsc2.detune.setValueAtTime(9, now);
+
+    const padGain = ctx.createGain();
+    padGain.gain.setValueAtTime(0.5, now);
+
+    padOsc1.connect(padGain);
+    padOsc2.connect(padGain);
+    padGain.connect(padFilter);
+    padFilter.connect(musicMasterGain);
+
+    // LFO modulating the filter cutoff for slow movement
+    padLfo = ctx.createOscillator();
+    padLfo.type = 'sine';
+    padLfo.frequency.setValueAtTime(0.08, now);
+    padLfoGain = ctx.createGain();
+    padLfoGain.gain.setValueAtTime(300, now);
+    padLfo.connect(padLfoGain);
+    padLfoGain.connect(padFilter.frequency);
+
+    padOsc1.start(now);
+    padOsc2.start(now);
+    padLfo.start(now);
+
+    // Soft arpeggio, scheduled with lookahead via setInterval
+    scheduleArpNote(ctx, musicMasterGain);
+    arpTimer = setInterval(() => {
+        if (!musicPlaying) return;
+        const c = getAudioContext();
+        if (!c || !musicMasterGain) return;
+        scheduleArpNote(c, musicMasterGain);
+    }, ARP_INTERVAL_SEC * 1000);
+}
+
+export function stopMusic(): void {
+    const ctx = getAudioContext();
+    if (!ctx || !musicPlaying) return;
+
+    const now = ctx.currentTime;
+
+    if (arpTimer) {
+        clearInterval(arpTimer);
+        arpTimer = null;
+    }
+
+    if (musicMasterGain) {
+        const gain = musicMasterGain;
+        try {
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(gain.gain.value, now);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + MUSIC_FADE_SEC);
+        } catch {
+            // ignore
+        }
+    }
+
+    const osc1 = padOsc1;
+    const osc2 = padOsc2;
+    const lfo = padLfo;
+    const gainToDisconnect = musicMasterGain;
+
+    setTimeout(() => {
+        try { osc1?.stop(); } catch { /* ignore */ }
+        try { osc2?.stop(); } catch { /* ignore */ }
+        try { lfo?.stop(); } catch { /* ignore */ }
+        try { gainToDisconnect?.disconnect(); } catch { /* ignore */ }
+    }, MUSIC_FADE_SEC * 1000 + 50);
+
+    padOsc1 = null;
+    padOsc2 = null;
+    padFilter = null;
+    padLfo = null;
+    padLfoGain = null;
+    musicMasterGain = null;
+    musicPlaying = false;
+}
+
+export function setMusicEnabled(on: boolean): void {
+    musicEnabled = on;
+    if (!on) {
+        stopMusic();
+        return;
+    }
+    const ctx = getAudioContext();
+    if (ctx && ctx.state !== 'suspended') {
+        startMusic();
+    }
+    // If context is still suspended, unlockAudioContext() will start it later.
 }
 
 // Debounce limits in ms to prevent audio spamming in 60fps loops
@@ -246,6 +419,8 @@ function playWin(ctx: AudioContext): void {
 }
 
 export function playSfx(id: SfxId): void {
+    if (!sfxEnabled) return;
+
     const nowMs = Date.now();
     const lastTime = lastPlayTimes[id] ?? 0;
     const minInterval = DEBOUNCE_MS[id] ?? 50;

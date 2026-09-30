@@ -1,7 +1,7 @@
-# ⏳ ECHO: God Mode
+# ⏳ Vencera Echo Game
 
-> **Пространственная кооперативная головоломка с временной петлёй на веб-камере.**  
-> Управляйте временем и пространством своими руками: создавайте призрачных клонов прошлых действий, решайте многослойные пространственные головоломки и спасите человечка!
+> **A webcam-only, spatial time-loop co-op puzzle game.** Built at ADMIT Hackathon 2026.
+> Control time and space with your bare hands: spawn ghostly clones of your past actions, solve layered spatial puzzles, and save the little guy — cooperating with your past self using nothing but a webcam.
 
 ---
 
@@ -44,36 +44,36 @@ npx --yes tsx --test
 
 ---
 
-## 🎮 Геймплей и Уровни
+## 🎮 Gameplay & Levels
 
-Игра построена на концепции **«Кооперации с самим собой из прошлого»**: вы записываете отрезок времени, выполняя одно действие (например, держите щит от смертоносного лазера), а в следующем витке времени ваш клон воспроизводит это движение с миллисекундной точностью, пока вы выполняете вторую часть задачи.
+The game is built on the concept of **"cooperating with your past self"**: you record a stretch of time while performing one action (e.g. holding a shield against a deadly laser), and on the next loop your clone replays that movement with millisecond precision while you carry out the second part of the task.
 
 ```mermaid
 flowchart LR
-    subgraph Round1 [Раунд 1: Запись петли]
-        A[Игрок держит щит / тянет рычаг] --> B[Запись кадров рук и объектов]
+    subgraph Round1 [Round 1: Recording the loop]
+        A[Player holds shield / pulls lever] --> B[Recording hand & object frames]
     end
-    subgraph Round2 [Раунд 2: Воспроизведение]
-        B --> C[Клон 1: Повторяет действие]
-        D[Игрок: Спасает человечка] --> E[Дверь открыта & Победа]
-        C -. Защита / активация .-> E
+    subgraph Round2 [Round 2: Playback]
+        B --> C[Clone 1: Replays the action]
+        D[Player: Rescues the little guy] --> E[Door opens & Victory]
+        C -. Shield / activation .-> E
     end
 ```
 
-### 🧭 Кампания и уровни:
-1. **🎓 Интерактивный туториал (4 шага)**:
-   - Шаг 1: Калибровка ладони — демонстрация открытой кисти 🖐️.
-   - Шаг 2: Калибровка щипка — захват куба и перемещение в зону телепорта 🤏.
-   - Шаг 3: Калибровка сброса кулаком ✊ (удержание 5 секунд для мгновенного перезапуска).
-   - Шаг 4: **Новый 4-й жест — указательный палец 👆** — наведение на кнопки меню уровней сверху для перехода между уровнями (подтверждение: удержание 1 секунды или щипок).
-2. **Уровень 1: «Призма и Кристалл» (Оптика & Преломление)**:
-   - Вертикальный лазер отражается призмой под углом 90°.
-   - Игрок направляет луч на фотонный кристалл до полной зарядки (100%), пока клон помогает удерживать компоненты.
-3. **Уровень 2: «Луч и щит» (Динамическая защита)**:
-   - Непрерывно осциллирующий смертоносный лазер перекрывает путь к выходу.
-   - Клон держит отражающий энергощит, закрывая человечка от сожжения, пока живой игрок ведет его к выходу.
-4. **Уровень 3: «Мульти-Эхо» (Гранд-финал: 2 клона одновременно)**:
-   - Требуется координация трех сущностей: **Клон 1** (бирюзовый) удерживает гравитационный рычаг, **Клон 2** (фиолетовый) блокирует блуждающий лазер щитом, а **Живой игрок** (янтарный) аккуратно эвакуирует человечка.
+### 🧭 Campaign & Levels:
+1. **🎓 Interactive tutorial (4 steps)**:
+   - Step 1: Palm calibration — show an open hand 🖐️.
+   - Step 2: Pinch calibration — grab the cube and move it into the teleport zone 🤏.
+   - Step 3: Fist-reset calibration ✊ (hold for 5 seconds for an instant restart).
+   - Step 4: **New 4th gesture — index finger pointing 👆** — aim at the level menu buttons above to switch levels (confirm with a 1-second hold or a pinch).
+2. **Level 1: Prism & Crystal (Optics & Refraction)**:
+   - A vertical laser is reflected by a prism at a 90° angle.
+   - The player aims the beam at a photon crystal until it's fully charged (100%), while the clone helps hold the components in place.
+3. **Level 2: Beam & Shield (Dynamic Defense)**:
+   - A continuously oscillating deadly laser blocks the path to the exit.
+   - The clone holds a reflective energy shield, keeping the little guy from burning, while the live player leads him to the exit.
+4. **Level 3: Multi-Echo (Grand finale: 2 clones at once)**:
+   - Requires coordinating three entities: **Clone 1** (cyan) holds a gravity lever, **Clone 2** (purple) blocks a wandering laser with a shield, and the **live player** (amber) carefully evacuates the little guy.
 
 ---
 
@@ -116,15 +116,15 @@ flowchart LR
 
 В проекте строго реализованы все требования регламента хакатона:
 
-### 🖐️ 4 жеста (3 обязательных + наш новый 4-й)
-| Жест | Визуализация | Роль в игре | Особенности детекции |
+### 🖐️ Controls: 4 gestures (3 required + our new 4th)
+| Gesture | Icon | Role in the game | Detection details |
 | :--- | :---: | :--- | :--- |
-| **Открытая ладонь** | 🖐️ | Старт уровня / Запуск записи петли | Все 4 пальца выпрямлены выше суставов PIP, запястье в кадре |
-| **Щипок (Pinch)** | 🤏 | Захват и перенос объектов (человечек, щит, призма); быстрое подтверждение выбора уровня | Евклидово расстояние между кончиком большого и указательного пальцев `< 0.08` |
-| **Кулак (Fist)** | ✊ | Аварийный сброс уровня (Hold 5s) | Все кончики пальцев сжаты ниже суставов; круговой таймер удержания |
-| **Указательный палец (новый 4-й жест)** | 👆 | Шаг 4 обучения: курсор меню уровней активируется только этим жестом; подтверждение — удержание 1 сек или щипок | Кончик указательного пальца выше сустава PIP, а средний, безымянный и мизинец согнуты ниже своих суставов; жест читается **по вертикали** — показывай вверх; фильтруется `StateStabilizer(5)` |
+| **Open palm** | 🖐️ | Start a level / begin recording the loop | All 4 fingers extended above their PIP joints, wrist in frame |
+| **Pinch** | 🤏 | Grab and move objects (the little guy, shield, prism); quick confirm for level selection | Euclidean distance between thumb tip and index fingertip `< 0.08` |
+| **Fist** | ✊ | Emergency level reset (hold 5s) | All fingertips curled below their joints; circular hold timer |
+| **Index finger pointing (new 4th gesture)** | 👆 | Tutorial step 4: the level-menu cursor only activates on this gesture; confirm with a 1s hold or a pinch | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
 
-> 💡 В обычном режиме ожидания (`IDLE`) курсор меню уровней доступен с любой позой руки — жест «указательный палец» **обязателен на шаге 4 обучения**, где им и проверяется его освоение.
+> 💡 In normal waiting mode (`IDLE`) the level-menu cursor works with any hand pose — the "index finger pointing" gesture is **required only in tutorial step 4**, where it's specifically tested.
 
 ### 🧠 Наш Твист: Интеллектуальный анатомический дебаггер ошибок
 В отличие от тривиальных игр, где при потере руки игра просто молчит, ECHO включает **активную систему обратной связи**:

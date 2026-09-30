@@ -1,9 +1,13 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ECHO: Временная петля (God Mode)</title>
+    <title>Vencera Echo Game</title>
+    <meta name="description" content="Vencera Echo Game — cooperate with your past self using only a webcam. Built at ADMIT Hackathon 2026.">
+    <meta property="og:title" content="Vencera Echo Game">
+    <meta property="og:description" content="Cooperate with your past self using only a webcam. Built at ADMIT Hackathon 2026.">
+    <meta property="og:image" content="/brand/admit-hackathon.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -17,16 +21,16 @@
         <div id="ui-layer">
             <div class="flex justify-between w-full">
                 <div class="status-box">
-                    <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 tracking-wider">ECHO: Временная Петля</h1>
-                    <p id="level-title" class="text-sm text-gray-400 mt-1 uppercase tracking-widest">Обучение</p>
+                    <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 tracking-wider">VENCERA ECHO GAME</h1>
+                    <p id="level-title" class="text-sm text-gray-400 mt-1 uppercase tracking-widest">Tutorial</p>
                     <select id="level-switcher" class="mt-2 bg-black border border-gray-600 text-white text-sm p-1 rounded focus:outline-none focus:border-purple-500 pointer-events-auto cursor-pointer">
                     </select>
                 </div>
-                <div id="mode-indicator" class="status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400">ОБУЧЕНИЕ 1/4</div>
+                <div id="mode-indicator" class="status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400">TUTORIAL 1/4</div>
             </div>
             <div class="text-center mb-8">
                 <p id="instruction" class="text-2xl text-gray-100 bg-black/60 px-8 py-4 rounded-2xl inline-block backdrop-blur-md border border-white/20 shadow-2xl">
-                    Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!
+                    Pinch your fingers together to grab objects. Show your palm to start!
                 </p>
             </div>
         </div>

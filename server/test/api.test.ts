@@ -35,6 +35,18 @@ test('guest, server score, monotonic progress and leaderboard', async (t) => {
  assert.equal((await c('/leaderboard',undefined,'GET')).body[0].isMe,true);
  assert.equal((await c('/runs',{levelId:99})).status,400);
 });
+test('rank is null with no runs, then reflects standing among players',async(t)=>{
+ const s=await setup(t);const a=s.client();const b=s.client();
+ await a('/session');
+ assert.deepEqual((await a('/me/rank',undefined,'GET')).body,{rank:null,total:0,levels:0,players:0});
+ await a('/runs',{levelId:1,timeLeftMs:1000,echoesUsed:1,deaths:0,resets:0});
+ const aRank=await a('/me/rank',undefined,'GET');
+ assert.equal(aRank.body.rank,1);assert.equal(aRank.body.players,1);assert.ok(aRank.body.total>0);
+ await b('/session');
+ await b('/runs',{levelId:1,timeLeftMs:5000,echoesUsed:1,deaths:0,resets:0});
+ const aAfter=await a('/me/rank',undefined,'GET');const bAfter=await b('/me/rank',undefined,'GET');
+ assert.equal(bAfter.body.rank,1);assert.equal(aAfter.body.rank,2);assert.equal(aAfter.body.players,2);assert.equal(bAfter.body.players,2);
+});
 test('five wrong guesses exhaust code, throttle and expiration',async(t)=>{
  const s=await setup(t);const c=s.client();await c('/session');
  await c('/auth/request',{email:'a@example.com'});const valid=s.code;

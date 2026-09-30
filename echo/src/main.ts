@@ -8,6 +8,7 @@ import {
 } from './game';
 import { LEVELS } from './levels';
 import { playSfx, unlockAudioContext } from './audio';
+import { t } from './i18n';
 
 declare const Hands: any;
 declare const Camera: any;
@@ -25,13 +26,13 @@ let wonTimeout: any = null;
 
 function getIdleInstruction(level: number): string {
     const config = LEVELS[level - 1];
-    return config?.hintIdle || "Уровень загружен! Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!";
+    return config?.hintIdle || t('idle.instructionDefault');
 }
 
 if (levelSwitcher) {
     const tutOption = document.createElement('option');
     tutOption.value = '0';
-    tutOption.text = 'Обучение';
+    tutOption.text = t('menu.tutorial');
     levelSwitcher.appendChild(tutOption);
     
     LEVELS.forEach((lvl, index) => {
@@ -66,20 +67,20 @@ if (levelSwitcher) {
             gameState.mode = 'TUTORIAL';
             gameState.tutorialStep = 1;
             resetLevel();
-            gameState.baseInstruction = "ОБУЧЕНИЕ 1/4: Покажи полностью открытую ладонь!";
+            gameState.baseInstruction = t('tutorial.step1.instruction');
             instruction.innerHTML = gameState.baseInstruction;
-            modeIndicator.innerText = "ОБУЧЕНИЕ 1/4";
+            modeIndicator.innerText = t('tutorial.step1.indicator');
             modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400";
             const titleEl = document.getElementById('level-title');
-            if (titleEl) titleEl.innerText = "Обучение";
+            if (titleEl) titleEl.innerText = t('menu.tutorial');
         } else {
             gameState.currentLevel = levelIndex;
             gameState.mode = 'IDLE';
             gameState.tutorialStep = 0; // not in tutorial anymore (0 = cleared)
-            
+
             resetLevel();
-            
-            modeIndicator.innerText = "ОЖИДАНИЕ...";
+
+            modeIndicator.innerText = t('mode.idle');
             modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
             gameState.baseInstruction = getIdleInstruction(levelIndex);
             instruction.innerHTML = gameState.baseInstruction;
@@ -118,8 +119,8 @@ function drawAndHandleLevelHUD(ctx: CanvasRenderingContext2D, w: number, h: numb
     lastHudRenderTime = now;
 
     const buttons = [
-        { label: 'ОБУЧЕНИЕ', value: 0 },
-        ...LEVELS.map((_lvl, index) => ({ label: `УРОВЕНЬ ${index + 1}`, value: index + 1 })),
+        { label: t('hud.tutorial'), value: 0 },
+        ...LEVELS.map((_lvl, index) => ({ label: t('hud.level', { n: index + 1 }), value: index + 1 })),
     ];
     
     const btnW = Math.min(140, (w - 40) / buttons.length - 12);
@@ -152,7 +153,7 @@ function drawAndHandleLevelHUD(ctx: CanvasRenderingContext2D, w: number, h: numb
         ctx.stroke();
         
         if (isTutorialStep4) {
-            const label = isPointingNow ? '☝️ КУРСОР АКТИВЕН' : 'Покажи УКАЗАТЕЛЬНЫЙ ПАЛЕЦ 👆';
+            const label = isPointingNow ? t('hud.cursorActive') : t('hud.showIndexFinger');
             drawUnmirroredText(ctx, label, cursorX, cursorY + 40, 'bold 16px sans-serif', isPointingNow ? '#4ade80' : '#facc15');
         }
     }
@@ -213,9 +214,9 @@ function onResults(results: any) {
     if (gameState.mode === 'WON') {
         drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
         canvasCtx.restore();
-        modeIndicator.innerText = "УСПЕХ!";
+        modeIndicator.innerText = t('mode.success');
         modeIndicator.className = "status-box text-2xl font-bold text-green-400 playing";
-        instruction.innerHTML = "🏆 ГЕНИАЛЬНО! Вы и ваши клоны спасли его!";
+        instruction.innerHTML = t('win.instructionMulti');
         
         // Reset after 5 seconds
         if (!gameState['wonTimeoutSet']) {
@@ -231,7 +232,7 @@ function onResults(results: any) {
                 gameState.recordedEchoes = [];
                 gameState.echoIndex = 0;
                 resetLevel();
-                modeIndicator.innerText = "ОЖИДАНИЕ...";
+                modeIndicator.innerText = t('mode.idle');
                 modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
                 gameState.baseInstruction = getIdleInstruction(gameState.currentLevel);
                 instruction.innerHTML = gameState.baseInstruction;
@@ -272,13 +273,13 @@ function onResults(results: any) {
             if (gameState.mode === 'TUTORIAL') {
                 gameState.tutorialStep = 4;
                 resetLevel();
-                gameState.baseInstruction = "ОБУЧЕНИЕ 4/4: Вытяни УКАЗАТЕЛЬНЫЙ ПАЛЕЦ 👆 и наведи на «УРОВЕНЬ 1» сверху, удерживай 1 сек!";
-                modeIndicator.innerText = "ОБУЧЕНИЕ 4/4";
+                gameState.baseInstruction = t('tutorial.step4.instruction');
+                modeIndicator.innerText = t('tutorial.step4.indicator');
             } else {
                 gameState.resets++;
                 gameState.mode = 'IDLE';
                 resetLevel();
-                modeIndicator.innerText = "ОЖИДАНИЕ...";
+                modeIndicator.innerText = t('mode.idle');
                 modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
                 gameState.baseInstruction = getIdleInstruction(gameState.currentLevel);
             }
@@ -299,7 +300,7 @@ function onResults(results: any) {
             canvasCtx.lineWidth = 8;
             canvasCtx.stroke();
             
-            let text = gameState.mode === 'TUTORIAL' ? 'ОТЛИЧНО!' : 'СБРОС ПЕТЛИ';
+            let text = gameState.mode === 'TUTORIAL' ? t('reset.tutorialGood') : t('reset.loop');
             drawUnmirroredText(canvasCtx, text, px, py - 80, 'bold 24px sans-serif', '#ef4444');
         }
     }
@@ -308,8 +309,8 @@ function onResults(results: any) {
         if (gameState.tutorialStep === 1) {
             if (liveHand && isOpenPalm(liveHand)) {
                 gameState.tutorialStep = 2;
-                gameState.baseInstruction = "ОБУЧЕНИЕ 2/4: Щипком перетащи БЛОК в ЦЕЛЬ!";
-                modeIndicator.innerText = "ОБУЧЕНИЕ 2/4";
+                gameState.baseInstruction = t('tutorial.step2.instruction');
+                modeIndicator.innerText = t('tutorial.step2.indicator');
             }
         } else if (gameState.tutorialStep === 2) {
             handleTutorialDrag(canvasCtx, canvasElement.width, canvasElement.height, liveHand);
@@ -317,8 +318,8 @@ function onResults(results: any) {
                 const dist = Math.sqrt(Math.pow(tutorialBox.x - tutorialTarget.x, 2) + Math.pow(tutorialBox.y - tutorialTarget.y, 2));
                 if (dist < tutorialTarget.radius) {
                     gameState.tutorialStep = 3;
-                    gameState.baseInstruction = "ОБУЧЕНИЕ 3/4: Сожми КУЛАК и держи его (сброс петли)!";
-                    modeIndicator.innerText = "ОБУЧЕНИЕ 3/4";
+                    gameState.baseInstruction = t('tutorial.step3.instruction');
+                    modeIndicator.innerText = t('tutorial.step3.indicator');
                 }
             }
         }
@@ -333,16 +334,16 @@ function onResults(results: any) {
             resetLevel();
             
             if (gameState.maxEchoes > 1) {
-                modeIndicator.innerText = `🔴 ЗАПИСЬ 1/${gameState.maxEchoes} (10с)`;
+                modeIndicator.innerText = t('recording.startMulti', { i: 1, max: gameState.maxEchoes });
             } else {
-                modeIndicator.innerText = `🔴 ЗАПИСЬ (10с)`;
+                modeIndicator.innerText = t('recording.start');
             }
             modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
             const config = LEVELS[gameState.currentLevel - 1];
             if (Array.isArray(config?.hintRecording)) {
-                gameState.baseInstruction = config.hintRecording[0] || "Продолжай запись!";
+                gameState.baseInstruction = config.hintRecording[0] || t('recording.continueDefault');
             } else {
-                gameState.baseInstruction = (config?.hintRecording as string) || "Продолжай запись!";
+                gameState.baseInstruction = (config?.hintRecording as string) || t('recording.continueDefault');
             }
             instruction.innerHTML = gameState.baseInstruction;
         }
@@ -350,9 +351,9 @@ function onResults(results: any) {
     else if (gameState.mode === 'RECORDING') {
         const timeLeft = Math.ceil((gameState.RECORD_DURATION - (now - gameState.recordStartTime))/1000);
         if (gameState.maxEchoes > 1) {
-            modeIndicator.innerText = `🔴 ЗАПИСЬ ${gameState.echoIndex + 1}/${gameState.maxEchoes}: ${timeLeft}с`;
+            modeIndicator.innerText = t('recording.tickMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes, time: timeLeft });
         } else {
-            modeIndicator.innerText = `🔴 ЗАПИСЬ: ${timeLeft}с`;
+            modeIndicator.innerText = t('recording.tick', { time: timeLeft });
         }
 
         if (now - gameState.recordStartTime > gameState.RECORD_DURATION) {
@@ -363,12 +364,12 @@ function onResults(results: any) {
                 gameState.currentFrame = 0;
                 resetLevel();
                 
-                modeIndicator.innerText = `🔴 ЗАПИСЬ ${gameState.echoIndex + 1}/${gameState.maxEchoes} (10с)`;
+                modeIndicator.innerText = t('recording.startMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
                 const config = LEVELS[gameState.currentLevel - 1];
                 if (Array.isArray(config?.hintRecording) && config.hintRecording.length > gameState.echoIndex) {
                     gameState.baseInstruction = config.hintRecording[gameState.echoIndex];
                 } else {
-                    gameState.baseInstruction = `ЭХО ${gameState.echoIndex + 1}/${gameState.maxEchoes}: Продолжай запись! (10 сек)`;
+                    gameState.baseInstruction = t('recording.echoContinue', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
                 }
                 instruction.innerHTML = gameState.baseInstruction;
             } else {
@@ -377,10 +378,10 @@ function onResults(results: any) {
                 gameState.currentFrame = 0;
                 resetLevel();
                 
-                modeIndicator.innerText = "👻 ПЕТЛЯ";
+                modeIndicator.innerText = t('mode.loop');
                 modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
                 const config = LEVELS[gameState.currentLevel - 1];
-                gameState.baseInstruction = config?.hintPlaying || "Хватай человечка и тащи к ДВЕРИ!";
+                gameState.baseInstruction = config?.hintPlaying || t('playing.defaultHint');
                 instruction.innerHTML = gameState.baseInstruction;
             }
         } else {
@@ -425,9 +426,9 @@ function onResults(results: any) {
             gameState.echoIndex = 0;
             resetLevel();
             gameState.resets++;
-            modeIndicator.innerText = "ПРОВАЛ...";
+            modeIndicator.innerText = t('mode.fail');
             modeIndicator.className = "status-box text-2xl font-bold text-red-500";
-            gameState.baseInstruction = "Время вышло! Дверь захлопнулась. Подними ладонь для рестарта.";
+            gameState.baseInstruction = t('fail.instruction');
         }
     }
 
@@ -439,7 +440,7 @@ function onResults(results: any) {
     if (liveHand) {
         if (gameState.mode === 'TUTORIAL') {
             if (liveHand[0].y > 0.8) {
-                currentHint = "Подними руку выше в кадр!";
+                currentHint = t('hint.raiseHandTutorial');
             }
         } else {
             const isPinch = isPinching(liveHand);
@@ -453,7 +454,7 @@ function onResults(results: any) {
             
             const tips = [8, 12, 16, 20];
             const joints = [6, 10, 14, 18];
-            const fingerNames = ['указательный', 'средний', 'безымянный', 'мизинец'];
+            const fingerNames = [t('finger.index'), t('finger.middle'), t('finger.ring'), t('finger.pinky')];
             let straight = 0;
             let bentFingers = [];
             for(let i=0; i<4; i++) {
@@ -465,39 +466,39 @@ function onResults(results: any) {
             }
 
             if (liveHand[0].y > 0.8) {
-                currentHint = "Подними руку выше в кадр, иначе твой клон исчезнет из записи!";
-            } else if (isPinch && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') && 
-                       man.grabbedBy !== 'live' && 
-                       lever.grabbedBy !== 'live' && 
-                       (!plate || plate.grabbedBy !== 'live') && 
-                       (!prism || prism.grabbedBy !== 'live') && 
+                currentHint = t('hint.raiseHand');
+            } else if (isPinch && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') &&
+                       man.grabbedBy !== 'live' &&
+                       lever.grabbedBy !== 'live' &&
+                       (!plate || plate.grabbedBy !== 'live') &&
+                       (!prism || prism.grabbedBy !== 'live') &&
                        closestDist > 0.15 && closestDist <= 0.30) {
-                let targetName = 'Человечком';
+                let targetName = t('target.man');
                 let targetX = man.x;
                 let targetY = man.y;
                 if (closestDist === distLever) {
-                    targetName = 'Рычагом';
+                    targetName = t('target.lever');
                     targetX = lever.x;
                     targetY = lever.handleY;
                 } else if (closestDist === distPlate && plate) {
-                    targetName = 'Щитом';
+                    targetName = t('target.shield');
                     targetX = plate.x;
                     targetY = plate.y;
                 } else if (closestDist === distPrism && prism) {
-                    targetName = 'Призмой';
+                    targetName = t('target.prism');
                     targetX = prism.x;
                     targetY = prism.y;
                 }
                 let dx = px - targetX;
                 let dy = py - targetY;
-                
-                let dirX = dx > 0 ? 'правее' : 'левее'; 
-                let dirY = dy > 0 ? 'выше' : 'ниже';
+
+                let dirX = dx > 0 ? t('dir.right') : t('dir.left');
+                let dirY = dy > 0 ? t('dir.up') : t('dir.down');
                 let moveInstruction = Math.abs(dx) > Math.abs(dy) ? dirX : dirY;
-                
-                currentHint = `Промах! Ты сжал пальцы рядом с ${targetName}, сдвинь руку ${moveInstruction}!`;
+
+                currentHint = t('hint.missedTarget', { target: targetName, dir: moveInstruction });
             } else if (gameState.mode === 'IDLE' && straight >= 1 && straight <= 3) {
-                currentHint = `Выпрями все пальцы (согнут ${bentFingers.join(', ')}), чтобы начать!`;
+                currentHint = t('hint.straightenFingers', { bent: bentFingers.join(', ') });
             }
         }
     }
@@ -546,5 +547,5 @@ void (async () => {
         levelSwitcher.dispatchEvent(new Event('change'));
     }
     try { await camera.start(); }
-    catch { instruction.textContent = 'Камера недоступна. Разреши доступ к камере и перезагрузи страницу (нужен HTTPS или localhost).'; }
+    catch { instruction.textContent = t('camera.unavailable'); }
 })();
