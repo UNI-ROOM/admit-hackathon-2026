@@ -4,7 +4,7 @@
 import { t } from '../i18n';
 import { show } from './router';
 import { cameraPermissionState } from '../camera';
-import { openProfile, openLeaderboard } from '../ui/account';
+import { openProfile, openLeaderboard, accountBadge } from '../ui/account';
 import { openSettings } from './settings';
 import { createMenuPanda } from './menu-panda';
 
@@ -103,7 +103,7 @@ function render(): void {
     const tagline = document.createElement('p');
     tagline.className = 'menu-tagline';
     tagline.textContent = t('menu.tagline');
-    titleWrap.append(h1, h2, tagline);
+    titleWrap.append(h1, h2, tagline, accountBadge());
 
     const buttons = document.createElement('div');
     buttons.className = 'menu-buttons';

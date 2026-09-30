@@ -88,7 +88,6 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
     .menu-buttons { max-width: 100%; }
     .menu-panda { position: static; width: 176px; flex-shrink: 0; }
     .menu-scene .menu-status { position: static; margin-top: 8px; padding: 0; }
-    .account-hud:not([hidden]) { display: none; }
 }
 
 .menu-buttons { display: flex; flex-direction: column; gap: 12px; width: min(360px, 90vw); }
@@ -190,13 +189,11 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
     .scene::after { animation: none !important; }
 }
 
-/* Name on its own line, then one even row of buttons. */
-.account-hud { position: fixed; top: 16px; right: 16px; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: min(520px, 95vw); padding: 12px; border-radius: 4px; background: rgba(0, 0, 0, 0.9); border: 1px solid var(--grid); color: var(--fg); pointer-events: auto; font: 14px system-ui; }
-.account-hud > span { flex: 1 0 100%; line-height: 1.4; }
+/* Signed-in name and points under the menu title. */
+.account-hud { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 14px; font: 14px system-ui; color: var(--fg); }
 .account-hud > span:first-child { font-weight: 600; }
-.account-hud > button { flex: 1 1 0; white-space: nowrap; }
 .account-hud span:nth-child(2) { color: var(--accent-2); }
-.account-hud button, .account-panel button, .settings-panel button { padding: 10px 14px; min-height: 44px; }
+.account-panel button, .settings-panel button { padding: 10px 14px; min-height: 44px; }
 .account-panel { z-index: 100; margin: auto; padding: 24px; width: min(540px, 94vw); max-height: 85vh; overflow: auto; background: #000; color: var(--fg); border: 1px solid var(--grid); border-radius: 4px; font: 16px system-ui; }
 .account-panel::backdrop { background: rgba(0, 0, 0, 0.75); }
 .account-panel h2 { font-family: var(--font-pixel); font-size: 15px; letter-spacing: 1px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--accent); color: var(--fg); }
@@ -208,6 +205,17 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .account-panel td, .account-panel th { padding: 8px; border-bottom: 1px solid var(--grid); }
 .account-panel .is-me { color: var(--accent-2); }
 .account-panel [hidden], .account-hud [hidden] { display: none; }
+.account-panel button.is-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Sign-in gate: a centred, branded card over a solid backdrop. */
+.account-panel.is-gate { width: min(460px, 92vw); padding: 36px 32px 28px; text-align: center; border-color: #262626; box-shadow: 0 0 0 1px rgba(43, 92, 255, 0.25), 0 24px 80px rgba(43, 92, 255, 0.18); }
+.account-panel.is-gate::backdrop { background: radial-gradient(circle at 50% 40%, rgba(43, 92, 255, 0.18), transparent 60%), #000; }
+.account-panel.is-gate h2 { border-bottom: none; padding-bottom: 0; margin: 24px 0 8px; font-size: 13px; }
+.account-panel.is-gate p { font-size: 14px; line-height: 1.5; }
+.account-panel.is-gate input { font-size: 16px; padding: 14px; text-align: center; }
+.account-panel.is-gate button { width: 100%; margin-top: 8px; }
+.gate-brand-title { font-family: var(--font-pixel); font-size: clamp(24px, 6vw, 34px); letter-spacing: 4px; color: var(--fg); }
+.gate-brand-sub { font-family: var(--font-pixel); font-size: 12px; letter-spacing: 3px; color: var(--accent); margin-top: 10px; }
 
 /* Hand cursor (ui/pointer.ts): index fingertip, dwell ring fills in 1 s, pinch clicks. */
 .hand-cursor { position: fixed; z-index: 1000; pointer-events: none; inset: auto; margin: 0; padding: 0; overflow: visible; width: 34px; height: 34px; transform: translate(-50%, -50%); border: 3px solid var(--accent-2); border-radius: 50%; box-sizing: border-box;
