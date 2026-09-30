@@ -47,6 +47,8 @@ function loadSettings(): Settings {
     try {
         const raw = storage.getItem(STORAGE_KEY);
         if (!raw) return { ...DEFAULT_SETTINGS };
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_SETTINGS };
         const loaded = { ...DEFAULT_SETTINGS, ...parsed };
         if (typeof loaded.musicVolume !== 'number' || isNaN(loaded.musicVolume)) {
             loaded.musicVolume = DEFAULT_SETTINGS.musicVolume;
