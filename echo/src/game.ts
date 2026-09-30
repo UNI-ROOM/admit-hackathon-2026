@@ -437,17 +437,6 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
-    // Make the safe entrance and lever positions visible without extra text.
-    ctx.save();
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.06)';
-    ctx.strokeStyle = 'rgba(52, 211, 153, 0.45)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
-    for (const zone of laserSafeZones) {
-        ctx.fillRect(zone.x * canvasWidth, zone.y * canvasHeight, zone.width * canvasWidth, zone.height * canvasHeight);
-        ctx.strokeRect(zone.x * canvasWidth, zone.y * canvasHeight, zone.width * canvasWidth, zone.height * canvasHeight);
-    }
-    ctx.restore();
     // Lever
     for (const [index, lever] of levers.entries()) {
         const lvx = lever.x * canvasWidth;
