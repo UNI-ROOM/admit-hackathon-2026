@@ -11,9 +11,9 @@ export const gameState: GameState = {
     frames: [], 
     recordedEchoes: [],
     echoIndex: 0,
+    recordingHands: 1,
     maxEchoes: 1,
     playStartTime: 0,
-    directPlay: false,
     currentFrame: 0,
     recordStartTime: 0,
     RECORD_DURATION: 10000,
@@ -22,6 +22,7 @@ export const gameState: GameState = {
 };
 
 export function getAgentColor(agentId: string): string {
+    agentId = agentId.replace(/^(ghost_\d+)_1$/, '$1');
     if (agentId === 'ghost_0' || agentId === 'ghost') return '#06b6d4';
     if (agentId === 'ghost_1') return '#a855f7';
     if (agentId === 'ghost_2') return '#3b82f6';
@@ -31,6 +32,7 @@ export function getAgentColor(agentId: string): string {
 }
 
 export function getAgentAlphaColor(agentId: string): string {
+    agentId = agentId.replace(/^(ghost_\d+)_1$/, '$1');
     if (agentId === 'ghost_0' || agentId === 'ghost') return 'rgba(6, 182, 212, 0.3)';
     if (agentId === 'ghost_1') return 'rgba(168, 85, 247, 0.3)';
     if (agentId === 'ghost_2') return 'rgba(59, 130, 246, 0.3)';
@@ -40,6 +42,8 @@ export function getAgentAlphaColor(agentId: string): string {
 }
 
 export function getAgentName(agentId: string): string {
+    const recordedSecondHand = /^ghost_(\d+)_1$/.exec(agentId);
+    if (recordedSecondHand) return t('agent.cloneHand', { n: Number(recordedSecondHand[1]) + 1 });
     if (agentId === 'ghost_0' || agentId === 'ghost') return t('agent.clone', { n: 1 });
     if (agentId === 'ghost_1') return t('agent.clone', { n: 2 });
     if (agentId === 'ghost_2') return t('agent.clone', { n: 3 });
@@ -67,13 +71,14 @@ type ReplayObject = 'man' | 'plate' | 'prism' | `lever_${number}`;
 
 // Attach actual grabs to the recording itself. Replacing/clearing recordings
 // also clears their reservations, while rewinding the same loop preserves them.
-const recordedObjects = new WeakMap<GameState['recordedEchoes'][number], Set<ReplayObject>>();
+const recordedObjects = new WeakMap<GameState['recordedEchoes'][number], Map<ReplayObject, string>>();
 
 function reservedBy(objectId: ReplayObject): string | null {
     const count = gameState.mode === 'PLAYING' ? gameState.recordedEchoes.length
         : gameState.mode === 'RECORDING' ? gameState.echoIndex : 0;
     for (let i = 0; i < count; i++) {
-        if (recordedObjects.get(gameState.recordedEchoes[i])?.has(objectId)) return `ghost_${i}`;
+        const hand = recordedObjects.get(gameState.recordedEchoes[i])?.get(objectId);
+        if (hand) return `ghost_${i}${hand === 'live_1' ? '_1' : ''}`;
     }
     return null;
 }
@@ -85,58 +90,45 @@ function canGrab(object: Entity, objectId: ReplayObject, agentId: string): boole
 
     // A replay may only pick up objects actually grabbed during its recording.
     // This also prevents a nearby clone from taking the live player's object.
-    const ghostIndex = /^ghost_(\d+)$/.exec(agentId);
+    const ghostIndex = /^ghost_(\d+)(?:_(1))?$/.exec(agentId);
     const objects = ghostIndex ? recordedObjects.get(gameState.recordedEchoes[Number(ghostIndex[1])]) : undefined;
-    return !objects || objects.has(objectId);
+    if (objects) return objects.get(objectId) === (ghostIndex![2] ? 'live_1' : 'live');
+    if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
+        const originalHand = recordedObjects.get(gameState.recordedEchoes[gameState.echoIndex])?.get(objectId);
+        if (originalHand && originalHand !== agentId) return false;
+    }
+    return true;
 }
 
 function grab(object: Entity, objectId: ReplayObject, agentId: string): void {
     object.grabbedBy = agentId;
     if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
         const recording = gameState.recordedEchoes[gameState.echoIndex];
-        if (recording) recordedObjects.get(recording)?.add(objectId);
+        if (recording) recordedObjects.get(recording)?.set(objectId, agentId);
     }
     playSfx('grab');
 }
 
-export function startTwoHandPlay(now: number): void {
-    const wasIdle = gameState.mode === 'IDLE';
-    // Only completed recordings become clones; the current partial recording
-    // stays under live control and must not reserve either hand's objects.
-    gameState.recordedEchoes = wasIdle ? [] : gameState.recordedEchoes.slice(0, gameState.echoIndex);
-    gameState.frames = gameState.recordedEchoes[0] || [];
-    gameState.echoIndex = gameState.recordedEchoes.length;
-    gameState.mode = 'PLAYING';
-    gameState.directPlay = true;
-    gameState.playStartTime = now;
-    gameState.currentFrame = 0;
-    gameState.baseInstruction = t('playing.twoHandsHint');
-    if (wasIdle) {
-        resetLevel();
-    } else {
-        // Replaying completed clones from frame zero also requires their
-        // objects to start at the recorded positions. Keep live objects intact.
-        const level = LEVELS[gameState.currentLevel - 1];
-        if (reservedBy('man')) Object.assign(man, level.man, { grabbedBy: null });
-        if (plate && level.plate && reservedBy('plate')) Object.assign(plate, level.plate, { grabbedBy: null });
-        if (prism && level.prism && reservedBy('prism')) {
-            Object.assign(prism, level.prism, { grabbedBy: null });
-            if (crystal) { crystal.charge = 0; crystal.charged = false; }
-        }
-        levers.forEach((object, index) => {
-            if (reservedBy(`lever_${index}`)) {
-                object.handleY = object.y;
-                object.active = false;
-                object.grabbedBy = null;
-            }
-        });
-    }
+export function recordingTarget(handCount: number): number {
+    const level = LEVELS[gameState.currentLevel - 1];
+    const hands = handCount >= 2 ? 2 : 1;
+    const tasks = (level.levers?.length ?? (level.lever ? 1 : 0)) + Number(!!level.plate) + Number(!!level.prism) + 1;
+    return Math.min(level.maxEchoes || 1, Math.max(level.minEchoes || 1, Math.ceil((tasks - hands) / hands)));
 }
 
-export function playingTimeLeft(now: number): number {
-    if (gameState.directPlay) return Math.max(0, gameState.RECORD_DURATION - (now - gameState.playStartTime));
+export function playingTimeLeft(): number {
     const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
     return Math.max(0, gameState.RECORD_DURATION * (1 - gameState.currentFrame / maxFrames));
+}
+
+// Each level needs active help from the recorded past, not just a nonempty
+// recording. Both hands of one clone count as one past self.
+export function activeEchoCount(): number {
+    const owners = [prism?.grabbedBy, plate?.grabbedBy, ...levers.map(object => object.grabbedBy)];
+    return new Set(owners.flatMap(owner => {
+        const match = owner && /^ghost_(\d+)(?:_1)?$/.exec(owner);
+        return match ? [match[1]] : [];
+    })).size;
 }
 
 // --- Particle System ---
@@ -263,7 +255,6 @@ export function triggerManDeath(message: string = t('death.default')) {
 
     if (gameState.mode === 'PLAYING') {
         gameState.currentFrame = 0;
-        if (gameState.directPlay) gameState.playStartTime = now;
         if (lvl.plate && plate) {
             plate.x = lvl.plate.x;
             plate.y = lvl.plate.y;
@@ -282,13 +273,13 @@ export function triggerManDeath(message: string = t('death.default')) {
 }
 
 export function resetLevel() {
-    if (gameState.mode === 'IDLE' || gameState.mode === 'TUTORIAL') gameState.directPlay = false;
+    if (gameState.mode === 'IDLE' || gameState.mode === 'TUTORIAL') gameState.recordingHands = 1;
     const levelIndex = Math.min(gameState.currentLevel - 1, LEVELS.length - 1);
     const lvl = LEVELS[levelIndex];
     gameState.maxEchoes = lvl.maxEchoes || 1;
     man = { x: lvl.man.x, y: Math.min(lvl.man.y, 0.8), grabbedBy: null, color: '#facc15' };
     
-    levers = (lvl.lever ? [lvl.lever] : []).map(p => ({ ...p, handleY: p.y, grabbedBy: null, active: false }));
+    levers = (lvl.levers || (lvl.lever ? [lvl.lever] : [])).map(p => ({ ...p, handleY: p.y, grabbedBy: null, active: false }));
     lever = levers[0] || { x: -1, y: -1, handleY: -1, grabbedBy: null, active: false };
     lastDeathTime = 0;
     
@@ -371,7 +362,7 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
 
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
     // Lever
-    for (const lever of levers) {
+    for (const [index, lever] of levers.entries()) {
         const lvx = lever.x * canvasWidth;
         const lvyTop = lever.y * canvasHeight;
         const lvyBot = (lever.y + 0.2) * canvasHeight;
@@ -395,7 +386,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, t('canvas.lever'), lvx, lvyTop - 20, '24px sans-serif', 'white');
+        drawUnmirroredText(ctx, t('canvas.lever') + (levers.length > 1 ? ` ${index + 1}` : ''), lvx, lvyTop - 20, '24px sans-serif', 'white');
     }
 
     // Door
@@ -411,6 +402,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     ctx.strokeRect(doorX, doorY, doorW, doorH);
     
     drawUnmirroredText(ctx, door.open ? t('canvas.exitOpen') : t('canvas.locked'), doorX + doorW/2, doorY - 10, '24px sans-serif', 'white');
+    const requiredEchoes = LEVELS[gameState.currentLevel - 1].minEchoes || 1;
+    drawUnmirroredText(ctx, t('canvas.echoLock', { active: activeEchoCount(), total: requiredEchoes }),
+        doorX + doorW/2, doorY + doorH + 24, 'bold 16px sans-serif', '#06b6d4');
 
     // Laser (Vertical beam)
     if (laser && laser.active) {
@@ -684,7 +678,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
 export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string) {
     if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
         const recording = gameState.recordedEchoes[gameState.echoIndex];
-        if (recording && !recordedObjects.has(recording)) recordedObjects.set(recording, new Set());
+        if (recording && !recordedObjects.has(recording)) recordedObjects.set(recording, new Map());
     }
     const wasHolding = (man.grabbedBy === agentId) || 
                        (levers.some(l => l.grabbedBy === agentId)) ||
@@ -912,8 +906,6 @@ export function evaluateRules() {
             let t = 0;
             if (gameState.mode === 'RECORDING') {
                 t = (Date.now() - gameState.recordStartTime) / 1000;
-            } else if (gameState.mode === 'PLAYING' && gameState.directPlay) {
-                t = (Date.now() - gameState.playStartTime) / 1000;
             } else if (gameState.mode === 'PLAYING') {
                 const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
                 const progress = maxFrames > 0 ? (gameState.currentFrame / maxFrames) : 0;
@@ -1019,7 +1011,8 @@ export function evaluateRules() {
     }
 
     // Door unlocking logic: requires lever (if present) AND crystal charged (if present)
-    door.open = levers.every(l => l.active) && (!crystal || crystal.charged);
+    door.open = levers.every(l => l.active) && (!crystal || crystal.charged)
+        && activeEchoCount() >= (LEVELS[gameState.currentLevel - 1].minEchoes || 1);
 
     // Hazard collision & Death mechanics
     let manHitByLaser = false;
@@ -1051,7 +1044,7 @@ export function evaluateRules() {
         if (Math.abs(man.x - door.x) < door.width/2 && Math.abs(man.y - door.y) < door.height/2) {
             if (gameState.mode === 'PLAYING') {
                 gameState.mode = 'WON';
-                gameState.baseInstruction = t(gameState.directPlay && !gameState.recordedEchoes.length ? 'win.instructionTwoHands' : 'win.instructionSingle');
+                gameState.baseInstruction = t('win.instructionSingle');
                 playSfx('win');
             }
         }

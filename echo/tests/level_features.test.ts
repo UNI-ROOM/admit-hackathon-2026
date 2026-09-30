@@ -29,7 +29,7 @@ test('Build check: npm run build succeeds cleanly', () => {
     }
 });
 
-test('Multi-echo logic: maxEchoes is 2 for Level 3, 1 for Levels 1 and 2', () => {
+test('Multi-echo logic: maxEchoes supports one, two and three recorded past selves', () => {
     // Check LEVELS configuration definitions
     const lvl1 = LEVELS.find(l => l.id === 1);
     const lvl2 = LEVELS.find(l => l.id === 2);
@@ -40,8 +40,8 @@ test('Multi-echo logic: maxEchoes is 2 for Level 3, 1 for Levels 1 and 2', () =>
     assert.ok(lvl3, 'Level 3 must exist');
 
     assert.strictEqual(lvl1.maxEchoes, 1, 'Level 1 maxEchoes must be 1');
-    assert.strictEqual(lvl2.maxEchoes, 1, 'Level 2 maxEchoes must be 1');
-    assert.strictEqual(lvl3.maxEchoes, 2, 'Level 3 maxEchoes must be 2');
+    assert.strictEqual(lvl2.maxEchoes, 2, 'Level 2 maxEchoes must be 2');
+    assert.strictEqual(lvl3.maxEchoes, 3, 'Level 3 maxEchoes must be 3');
     assert.strictEqual(lvl3.title, 'Level 3: Multi-Echo', 'Level 3 title must be "Level 3: Multi-Echo"');
 
     // Check runtime gameState behavior with resetLevel()
@@ -51,11 +51,11 @@ test('Multi-echo logic: maxEchoes is 2 for Level 3, 1 for Levels 1 and 2', () =>
 
     gameState.currentLevel = 2;
     resetLevel();
-    assert.strictEqual(gameState.maxEchoes, 1, 'gameState.maxEchoes must be 1 on Level 2');
+    assert.strictEqual(gameState.maxEchoes, 2, 'gameState.maxEchoes must be 2 on Level 2');
 
     gameState.currentLevel = 3;
     resetLevel();
-    assert.strictEqual(gameState.maxEchoes, 2, 'gameState.maxEchoes must be 2 on Level 3');
+    assert.strictEqual(gameState.maxEchoes, 3, 'gameState.maxEchoes must be 3 on Level 3');
 });
 
 test('Multi-echo agent styling and naming (ghost_0, ghost_1, live)', () => {

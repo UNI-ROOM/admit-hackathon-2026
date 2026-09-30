@@ -2,14 +2,15 @@ import { initializeAccount, showResult, closePanel, panelOpen, handleDwell } fro
 import './style.css';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
 import {
-    gameState, man, lever, tutorialBox, tutorialTarget,
+    gameState, man, levers, tutorialBox, tutorialTarget,
     resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
-    getAgentColor, plate, prism, deathBanner, startTwoHandPlay, playingTimeLeft
+    getAgentColor, plate, prism, deathBanner, recordingTarget, playingTimeLeft
 } from './game';
 import { LEVELS } from './levels';
+import type { EchoFrame } from './types';
 import { playSfx, unlockAudioContext } from './audio';
 import { t } from './i18n';
-import { LiveHandTracker, type HandResults } from './hands';
+import { LiveHandTracker, snapshotHands, recordedHands, type HandResults } from './hands';
 import { getSettings, subscribe as subscribeSettings } from './settings';
 import { show, current, onEnterGame } from './scenes/router';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
@@ -57,11 +58,15 @@ const hintStabilizer = new StateStabilizer(15, "");
 let handModelReady = false;
 const handTracker = new LiveHandTracker();
 
-function startDirectRound(now: number): void {
-    startTwoHandPlay(now);
-    modeIndicator.innerText = t('playing.twoHandsTick', { time: Math.ceil(gameState.RECORD_DURATION / 1000) });
-    modeIndicator.className = 'status-box text-2xl font-bold text-green-400 playing';
-    instruction.innerHTML = gameState.baseInstruction;
+function replayFrame(frame: EchoFrame | undefined, echoIndex: number): void {
+    for (const [handIndex, hand] of recordedHands(frame || null).entries()) {
+        const agentId = `ghost_${echoIndex}${handIndex ? '_1' : ''}`;
+        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, hand, agentId);
+        if (hand && getSettings().showSkeleton) {
+            drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: getAgentColor(agentId), lineWidth: 4});
+            drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 4});
+        }
+    }
 }
 
 function onResults(results: HandResults) {
@@ -94,7 +99,7 @@ function onResults(results: HandResults) {
         canvasCtx.restore();
         modeIndicator.innerText = t('mode.success');
         modeIndicator.className = "status-box text-2xl font-bold text-green-400 playing";
-        instruction.innerHTML = t(gameState.directPlay && !gameState.recordedEchoes.length ? 'win.instructionTwoHands' : 'win.instructionMulti');
+        instruction.innerHTML = t('win.instructionMulti');
 
         // Reset after 8 seconds
         if (!gameState['wonTimeoutSet']) {
@@ -125,7 +130,7 @@ function onResults(results: HandResults) {
                 restartCurrentLevel();
             };
             wonTimeout = setTimeout(nextLevel, 8000);
-            void showResult({ levelId: gameState.currentLevel, timeLeftMs: playingTimeLeft(Date.now()), echoesUsed: gameState.recordedEchoes.filter(e => e.some(Boolean)).length, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
+            void showResult({ levelId: gameState.currentLevel, timeLeftMs: playingTimeLeft(), echoesUsed: gameState.recordedEchoes.filter(e => e.some(frame => recordedHands(frame).some(Boolean))).length, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
         }
         return;
     }
@@ -178,8 +183,6 @@ function onResults(results: HandResults) {
         }
     }
 
-    if (gameState.mode === 'RECORDING' && twoHands) startDirectRound(now);
-
     if (gameState.mode === 'TUTORIAL') {
         if (gameState.tutorialStep === 1) {
             if (liveHand && isOpenPalm(liveHand)) {
@@ -201,34 +204,34 @@ function onResults(results: HandResults) {
     } else if (gameState.mode === 'IDLE') {
         if (liveHands.some(hand => hand && isOpenPalm(hand))) {
             if (!gameState.attemptStart) gameState.attemptStart = now;
-            if (twoHands) {
-                startDirectRound(now);
-            } else {
-                gameState.mode = 'RECORDING';
-                gameState.directPlay = false;
-                gameState.recordStartTime = now;
-                gameState.echoIndex = 0;
-                gameState.recordedEchoes = [[]];
-                gameState.frames = [];
-                resetLevel();
+            gameState.mode = 'RECORDING';
+            gameState.recordStartTime = now;
+            gameState.echoIndex = 0;
+            gameState.recordedEchoes = [[]];
+            gameState.frames = [];
+            resetLevel();
+            gameState.recordingHands = twoHands ? 2 : 1;
+            gameState.maxEchoes = recordingTarget(gameState.recordingHands);
 
-                if (gameState.maxEchoes > 1) {
-                    modeIndicator.innerText = t('recording.startMulti', { i: 1, max: gameState.maxEchoes });
-                } else {
-                    modeIndicator.innerText = t('recording.start');
-                }
-                modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
-                const config = LEVELS[gameState.currentLevel - 1];
-                if (Array.isArray(config?.hintRecording)) {
-                    gameState.baseInstruction = config.hintRecording[0] || t('recording.continueDefault');
-                } else {
-                    gameState.baseInstruction = (config?.hintRecording as string) || t('recording.continueDefault');
-                }
-                instruction.innerHTML = gameState.baseInstruction;
+            if (gameState.maxEchoes > 1) {
+                modeIndicator.innerText = t('recording.startMulti', { i: 1, max: gameState.maxEchoes });
+            } else {
+                modeIndicator.innerText = t('recording.start');
             }
+            modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
+            const config = LEVELS[gameState.currentLevel - 1];
+            if (Array.isArray(config?.hintRecording)) {
+                gameState.baseInstruction = config.hintRecording[0] || t('recording.continueDefault');
+            } else {
+                gameState.baseInstruction = (config?.hintRecording as string) || t('recording.continueDefault');
+            }
+            instruction.innerHTML = gameState.baseInstruction;
         }
     }
     else if (gameState.mode === 'RECORDING') {
+        if (twoHands) gameState.recordingHands = 2;
+        const targetRecordings = Math.max(gameState.echoIndex + 1, recordingTarget(gameState.recordingHands));
+        gameState.maxEchoes = targetRecordings;
         const timeLeft = Math.ceil((gameState.RECORD_DURATION - (now - gameState.recordStartTime))/1000);
         if (gameState.maxEchoes > 1) {
             modeIndicator.innerText = t('recording.tickMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes, time: timeLeft });
@@ -243,6 +246,7 @@ function onResults(results: HandResults) {
                 gameState.recordStartTime = now;
                 gameState.currentFrame = 0;
                 resetLevel();
+                gameState.maxEchoes = targetRecordings;
 
                 modeIndicator.innerText = t('recording.startMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
                 const config = LEVELS[gameState.currentLevel - 1];
@@ -268,48 +272,27 @@ function onResults(results: HandResults) {
             if (!gameState.recordedEchoes[gameState.echoIndex]) {
                 gameState.recordedEchoes[gameState.echoIndex] = [];
             }
-            const recordedHand = liveHand ? JSON.parse(JSON.stringify(liveHand)) : null;
+            const recordedHand = snapshotHands(liveHands);
             gameState.recordedEchoes[gameState.echoIndex].push(recordedHand);
             gameState.frames = gameState.recordedEchoes[0];
 
             const currentRecFrame = gameState.recordedEchoes[gameState.echoIndex].length - 1;
             for (let i = 0; i < gameState.echoIndex; i++) {
                 const echo = gameState.recordedEchoes[i];
-                const prevHand = echo ? echo[Math.min(currentRecFrame, echo.length - 1)] : null;
-                handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, prevHand, `ghost_${i}`);
-                if (prevHand) {
-                    const ghostColor = getAgentColor(`ghost_${i}`);
-                    if (getSettings().showSkeleton) {
-                        drawConnectors(canvasCtx, prevHand, HAND_CONNECTIONS, {color: ghostColor, lineWidth: 4});
-                        drawLandmarks(canvasCtx, prevHand, {color: '#ffffff', lineWidth: 2, radius: 4});
-                    }
-                }
+                replayFrame(echo?.[Math.min(currentRecFrame, echo.length - 1)], i);
             }
         }
     }
     else if (gameState.mode === 'PLAYING') {
         const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
-        if (gameState.directPlay) {
-            const elapsed = now - gameState.playStartTime;
-            gameState.currentFrame = Math.min(maxFrames - 1, Math.floor(elapsed / gameState.RECORD_DURATION * maxFrames));
-            modeIndicator.innerText = t('playing.twoHandsTick', { time: Math.ceil(playingTimeLeft(now) / 1000) });
-        }
 
         for (let i = 0; i < gameState.recordedEchoes.length; i++) {
             const echo = gameState.recordedEchoes[i];
-            const ghostHand = echo ? echo[gameState.currentFrame] : null;
-            handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, ghostHand, `ghost_${i}`);
-            if (ghostHand) {
-                const ghostColor = getAgentColor(`ghost_${i}`);
-                if (getSettings().showSkeleton) {
-                    drawConnectors(canvasCtx, ghostHand, HAND_CONNECTIONS, {color: ghostColor, lineWidth: 4});
-                    drawLandmarks(canvasCtx, ghostHand, {color: '#ffffff', lineWidth: 2, radius: 4});
-                }
-            }
+            replayFrame(echo?.[gameState.currentFrame], i);
         }
 
-        if (!gameState.directPlay) gameState.currentFrame++;
-        if (gameState.directPlay ? playingTimeLeft(now) <= 0 : gameState.currentFrame >= maxFrames) {
+        gameState.currentFrame++;
+        if (gameState.currentFrame >= maxFrames) {
             gameState.mode = 'IDLE';
             gameState.recordedEchoes = [];
             gameState.echoIndex = 0;
@@ -337,7 +320,9 @@ function onResults(results: HandResults) {
             const px = (liveHand[4].x + liveHand[8].x) / 2;
             const py = (liveHand[4].y + liveHand[8].y) / 2;
             const distMan = Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2));
-            const distLever = lever.x >= 0 ? Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) : 999;
+            const closestLever = levers.reduce<(typeof levers)[number] | undefined>((best, candidate) =>
+                !best || Math.hypot(px - candidate.x, py - candidate.handleY) < Math.hypot(px - best.x, py - best.handleY) ? candidate : best, undefined);
+            const distLever = closestLever ? Math.hypot(px - closestLever.x, py - closestLever.handleY) : 999;
             const distPlate = plate ? Math.sqrt(Math.pow(px - plate.x, 2) + Math.pow(py - plate.y, 2)) : 999;
             const distPrism = prism ? Math.sqrt(Math.pow(px - prism.x, 2) + Math.pow(py - prism.y, 2)) : 999;
             let closestDist = Math.min(distMan, distLever, distPlate, distPrism);
@@ -359,17 +344,17 @@ function onResults(results: HandResults) {
                 currentHint = t('hint.raiseHand');
             } else if (isPinch && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') &&
                        man.grabbedBy !== liveAgent &&
-                       lever.grabbedBy !== liveAgent &&
+                       !levers.some(object => object.grabbedBy === liveAgent) &&
                        (!plate || plate.grabbedBy !== liveAgent) &&
                        (!prism || prism.grabbedBy !== liveAgent) &&
                        closestDist > 0.15 && closestDist <= 0.30) {
                 let targetName = t('target.man');
                 let targetX = man.x;
                 let targetY = man.y;
-                if (closestDist === distLever) {
+                if (closestDist === distLever && closestLever) {
                     targetName = t('target.lever');
-                    targetX = lever.x;
-                    targetY = lever.handleY;
+                    targetX = closestLever.x;
+                    targetY = closestLever.handleY;
                 } else if (closestDist === distPlate && plate) {
                     targetName = t('target.shield');
                     targetX = plate.x;

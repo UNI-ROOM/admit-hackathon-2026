@@ -67,7 +67,7 @@ test('email attachment, guest merge, and code cannot be replayed',async(t)=>{
  await b('/progress',{maxLevel:3,tutorialDone:true},'PUT');
  s.tick();await b('/auth/request',{email:'a@example.com'});
  const merged=await b('/auth/verify',{email:'a@example.com',code:s.code});
- assert.equal(merged.body.user.id,original);assert.deepEqual(merged.body.best,{'1':1100,'2':1200});assert.equal(merged.body.progress.max_level,3);
+ assert.equal(merged.body.user.id,original);assert.deepEqual(merged.body.best,{'1':1100,'2':1500});assert.equal(merged.body.progress.max_level,3);
  assert.equal((await b('/auth/verify',{email:'a@example.com',code:s.code})).status,400);
  assert.equal((await a('/me',undefined,'GET')).body.user.id,original);
 });

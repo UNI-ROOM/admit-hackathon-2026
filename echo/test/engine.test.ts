@@ -8,7 +8,7 @@ import {
     getAgentName, 
     particles, 
     spawnSparks, 
-    gameState, 
+    gameState, levers,
     man, 
     lever, 
     door, 
@@ -102,7 +102,7 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
             assert.ok(lvl.man.x >= 0 && lvl.man.x <= 1);
             assert.ok(lvl.man.y >= 0 && lvl.man.y <= 1);
             assert.ok(lvl.door.width > 0 && lvl.door.height > 0);
-            assert.ok((lvl.maxEchoes ?? 1) >= 1 && (lvl.maxEchoes ?? 1) <= 2);
+            assert.ok((lvl.maxEchoes ?? 1) >= 1 && (lvl.maxEchoes ?? 1) <= 3);
         });
     });
 
@@ -180,7 +180,7 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         assert.equal(door.open, false);
 
         // Pull lever down => door unlocks
-        lever.handleY = lever.y + 0.2;
+        for (const [index, object] of levers.entries()) { object.handleY = object.y + 0.2; object.grabbedBy = `ghost_${index}`; }
         evaluateRules();
         assert.equal(lever.active, true);
         assert.equal(door.open, true);

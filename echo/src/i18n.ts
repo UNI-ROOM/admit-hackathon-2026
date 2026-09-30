@@ -64,7 +64,6 @@ export const STRINGS: { en: Dict; ru: Dict } = {
 
         'win.instructionMulti': '🏆 BRILLIANT! You and your clones saved him!',
         'win.instructionSingle': '🏆 BRILLIANT! You and your clone saved him!',
-        'win.instructionTwoHands': '🏆 BRILLIANT! Both hands saved him — no clone needed!',
 
         'reset.tutorialGood': 'GREAT!',
         'reset.loop': 'LOOP RESET',
@@ -77,8 +76,6 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'recording.echoContinue': 'ECHO {i}/{max}: Keep recording! (10 sec)',
 
         'playing.defaultHint': 'Grab the little guy and drag him to the DOOR!',
-        'playing.twoHandsHint': 'TWO HANDS: pinch with each hand to hold a different object. Keep one on the prism/shield and guide the little guy with the other!',
-        'playing.twoHandsTick': '👐 TWO HANDS: {time}s',
 
         'fail.instruction': 'Time is up! The door slammed shut. Raise your palm to restart.',
 
@@ -109,10 +106,12 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'agent.clone': 'Clone {n}',
         'agent.you': 'You',
         'agent.otherHand': 'Other hand',
+        'agent.cloneHand': "Clone {n} · hand 2",
 
         'canvas.lever': 'LEVER',
         'canvas.exitOpen': 'EXIT OPEN',
         'canvas.locked': 'LOCKED',
+        'canvas.echoLock': "ACTIVE ECHOES {active}/{total}",
         'canvas.shield': 'SHIELD',
         'canvas.prism': 'PRISM',
         'canvas.crystal': 'CRYSTAL',
@@ -124,18 +123,22 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'tutorial.step4.canvasHint2': 'and aim it at the ☰ MENU button above',
 
         'level1.title': 'Level 1: Prism & Crystal',
-        'level1.hintIdle': "Place the <b class='text-cyan-400'>PRISM</b> under the laser to aim the beam at the crystal! (10 sec)",
-        'level1.hintRecording': 'The clone will aim the beam at the crystal. YOU grab the little guy and run to the door!',
+        'level1.hintIdle': "Show an open palm to RECORD both hands. The exit needs help from your past self!",
+        'level1.hintRecording': "RECORD: hold the prism under the laser for 10 seconds. Both hands are recorded; adding a hand never skips recording.",
         'level1.hintPlaying': "The clone is charging the crystal! YOU lead the little guy to the open <b class='text-green-400'>DOOR</b>!",
 
         'level2.title': 'Level 2: Beam & Shield',
-        'level2.hintRecording': "Hold the <b class='text-red-400'>SHIELD</b> under the laser and move with it! (10 sec)",
-        'level2.hintPlaying': "The clone holds the shield. YOU grab the little guy and drag him to the <b class='text-green-400'>DOOR</b>!",
+        'level2.hintIdle': "Lever + moving shield + rescue: record past hands to help! Show an open palm to begin.",
+        'level2.hintRecording1': "Your past hand holds the lever. RECORD the shield following the moving laser.",
+        'level2.hintRecording': "RECORD the lever held down. With two hands you can also record the shield following the laser!",
+        'level2.hintPlaying': "Your past hands help! Keep the lever down and the beam blocked, then guide the little guy to the exit.",
 
         'level3.title': 'Level 3: Multi-Echo',
-        'level3.hintRecording0': "ECHO 1/2: Pull the <b class='text-red-400'>LEVER</b> down and hold it! (10 sec)",
-        'level3.hintRecording1': "ECHO 2/2: Clone 1 is holding the lever. YOU hold the <b class='text-blue-400'>SHIELD</b> and move with the laser! (10 sec)",
-        'level3.hintPlaying': "The clones are holding the lever and the shield! YOU grab the little guy and rescue him to the <b class='text-green-400'>DOOR</b>!",
+        'level3.hintIdle': "Two levers, moving shield, rescue — the exit needs two different past selves. Show an open palm to RECORD.",
+        'level3.hintRecording2': "Your past hands hold both levers. RECORD the shield following the laser, then rescue the little guy!",
+        'level3.hintRecording0': "RECORD lever 1 held down. With two hands, also hold lever 2. The exit needs two different echoes.",
+        'level3.hintRecording1': "RECORD the free lever and/or the moving shield. Your first echo repeats both past hands.",
+        'level3.hintPlaying': "Both levers must stay down, the shield must block the beam, and TWO echoes must help. Guide the little guy to the exit!",
 
         'account.signIn': 'Sign in',
         'account.nickname': 'Nickname',
@@ -278,7 +281,6 @@ export const STRINGS: { en: Dict; ru: Dict } = {
 
         'win.instructionMulti': '🏆 ГЕНИАЛЬНО! Вы и ваши клоны спасли его!',
         'win.instructionSingle': '🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!',
-        'win.instructionTwoHands': '🏆 ГЕНИАЛЬНО! Спасли двумя руками без клона!',
 
         'reset.tutorialGood': 'ОТЛИЧНО!',
         'reset.loop': 'СБРОС ПЕТЛИ',
@@ -291,8 +293,6 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'recording.echoContinue': 'ЭХО {i}/{max}: Продолжай запись! (10 сек)',
 
         'playing.defaultHint': 'Хватай человечка и тащи к ДВЕРИ!',
-        'playing.twoHandsHint': 'ДВЕ РУКИ: захватывай щипком каждой руки свой объект. Одной держи призму/щит, другой веди человечка!',
-        'playing.twoHandsTick': '👐 ДВЕ РУКИ: {time}с',
 
         'fail.instruction': 'Время вышло! Дверь захлопнулась. Подними ладонь для рестарта.',
 
@@ -323,10 +323,12 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'agent.clone': 'Клон {n}',
         'agent.you': 'Вы',
         'agent.otherHand': 'Вторая рука',
+        'agent.cloneHand': "Клон {n} · рука 2",
 
         'canvas.lever': 'РЫЧАГ',
         'canvas.exitOpen': 'ВЫХОД ОТКРЫТ',
         'canvas.locked': 'ЗАКРЫТО',
+        'canvas.echoLock': "АКТИВНЫЕ ЭХО {active}/{total}",
         'canvas.shield': 'ЩИТ',
         'canvas.prism': 'ПРИЗМА',
         'canvas.crystal': 'КРИСТАЛЛ',
@@ -338,18 +340,22 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'tutorial.step4.canvasHint2': 'и наведи на кнопку ☰ МЕНЮ сверху',
 
         'level1.title': 'Уровень 1: Призма и Кристалл',
-        'level1.hintIdle': "Поставь <b class='text-cyan-400'>ПРИЗМУ</b> под лазер, чтобы направить луч в кристалл! (10 сек)",
-        'level1.hintRecording': 'Клон направит луч в кристалл. А ТЫ хватай человечка и беги к двери!',
+        'level1.hintIdle': "Покажи ладонь для ЗАПИСИ обеих рук. Выходу нужна помощь твоей прошлой версии!",
+        'level1.hintRecording': "ЗАПИСЬ: держи призму под лазером 10 секунд. Записываются обе руки; вторая рука не отменяет запись.",
         'level1.hintPlaying': "Клон заряжает кристалл! А ТЫ веди человечка в открытую <b class='text-green-400'>ДВЕРЬ</b>!",
 
         'level2.title': 'Уровень 2: Луч и щит',
-        'level2.hintRecording': "Держи <b class='text-red-400'>ЩИТ</b> под лазером и двигай за ним! (10 сек)",
-        'level2.hintPlaying': "Клон держит щит. А ТЫ хватай человечка и тащи к <b class='text-green-400'>ДВЕРИ</b>!",
+        'level2.hintIdle': "Рычаг, движущийся щит и спасение: запиши прошлые руки в помощь! Покажи ладонь для старта.",
+        'level2.hintRecording1': "Прошлая рука держит рычаг. ЗАПИШИ щит, следующий за движущимся лазером.",
+        'level2.hintRecording': "ЗАПИШИ удержание рычага внизу. Двумя руками можно одновременно записать щит, следующий за лазером!",
+        'level2.hintPlaying': "Прошлые руки помогают! Держи рычаг внизу и блокируй луч, затем веди человечка к выходу.",
 
         'level3.title': 'Уровень 3: Мульти-Эхо',
-        'level3.hintRecording0': "ЭХО 1/2: Потяни <b class='text-red-400'>РЫЧАГ</b> вниз и держи его! (10 сек)",
-        'level3.hintRecording1': "ЭХО 2/2: Клон 1 держит рычаг. А ты держи <b class='text-blue-400'>ЩИТ</b> и двигай за лазером! (10 сек)",
-        'level3.hintPlaying': "Клоны держат рычаг и щит! А ТЫ хватай человечка и спасай его к <b class='text-green-400'>ДВЕРИ</b>!",
+        'level3.hintIdle': "Два рычага, движущийся щит и спасение — выходу нужны две разные прошлые версии. Покажи ладонь для ЗАПИСИ.",
+        'level3.hintRecording2': "Прошлые руки держат оба рычага. ЗАПИШИ щит за лазером, затем спасай человечка!",
+        'level3.hintRecording0': "ЗАПИШИ рычаг 1 внизу. Второй рукой можно держать рычаг 2. Выходу нужны два разных Эхо.",
+        'level3.hintRecording1': "ЗАПИШИ свободный рычаг и/или движущийся щит. Первое Эхо повторяет обе прошлые руки.",
+        'level3.hintPlaying': "Оба рычага внизу, щит блокирует луч, помогают ДВА разных Эхо. Веди человечка к выходу!",
 
         'account.signIn': 'Войти',
         'account.nickname': 'Ник',

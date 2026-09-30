@@ -1,3 +1,7 @@
+import type { HandLandmarks } from './hands';
+
+export type EchoFrame = { hands: [HandLandmarks | null, HandLandmarks | null] } | HandLandmarks | null;
+
 export interface Point {
     x: number;
     y: number;
@@ -78,12 +82,12 @@ export interface GameState {
     deaths: number;
     resets: number;
     attemptStart: number;
-    frames: any[];
-    recordedEchoes: any[][];
+    frames: EchoFrame[];
+    recordedEchoes: EchoFrame[][];
     echoIndex: number;
+    recordingHands: 1 | 2;
     maxEchoes: number;
     playStartTime: number;
-    directPlay: boolean;
     currentFrame: number;
     recordStartTime: number;
     RECORD_DURATION: number;
@@ -97,6 +101,7 @@ export interface LevelConfig {
     title: string;
     man: { x: number, y: number };
     lever?: { x: number, y: number };
+    levers?: { x: number, y: number }[];
     door: { x: number, y: number, width: number, height: number };
     laser?: { 
         x: number; 
@@ -112,6 +117,7 @@ export interface LevelConfig {
     crystal?: { x: number, y: number, width: number, height: number };
     prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
     maxEchoes?: number;
+    minEchoes?: number;
     hintIdle?: string;
     hintRecording?: string | string[];
     hintPlaying?: string;

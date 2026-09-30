@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LiveHandTracker } from '../src/hands';
-import { gameState, resetLevel, handleDragAndDrop, startTwoHandPlay, playingTimeLeft,
-    evaluateRules, man, plate, prism, lever, door, crystal, laser } from '../src/game';
+import { LiveHandTracker, snapshotHands, recordedHands } from '../src/hands';
+import { gameState, resetLevel, handleDragAndDrop, recordingTarget, playingTimeLeft,
+    evaluateRules, activeEchoCount, man, plate, prism, levers, lever, door, crystal } from '../src/game';
 
 const ctx = new Proxy({} as CanvasRenderingContext2D, { get: () => () => {}, set: () => true });
 const hand = (x: number, y: number) => Array.from({ length: 21 }, () => ({ x, y, z: 0 }));
 const drag = (landmarks: ReturnType<typeof hand> | null, agent: string) => handleDragAndDrop(ctx, 1000, 1000, landmarks, agent);
 
-function idle(level: number) {
+function recording(level: number) {
     gameState.currentLevel = level;
-    gameState.mode = 'IDLE';
-    gameState.recordedEchoes = [];
+    gameState.mode = 'RECORDING';
+    gameState.recordedEchoes = [[]];
     gameState.echoIndex = 0;
     resetLevel();
 }
@@ -37,9 +37,19 @@ test('wrist distance preserves identity when handedness is absent or uncertain',
     assert.deepEqual(tracker.update({ multiHandLandmarks: [movedSecond], multiHandedness: [{ label: 'Left', score: 0.51 }] }), [null, movedSecond]);
 });
 
-test('each live hand holds one distinct object, and losing one only releases its own object', () => {
-    idle(1);
-    startTwoHandPlay(Date.now());
+
+test('two-hand snapshots keep both identities, null slots and immutable past positions', () => {
+    const first = hand(0.2, 0.5), second = hand(0.8, 0.5);
+    const frame = snapshotHands([first, second]);
+    first[0].x = 0.9;
+    assert.equal(recordedHands(frame)[0]![0].x, 0.2);
+    assert.equal(recordedHands(frame)[1]![0].x, 0.8);
+    assert.deepEqual(recordedHands(snapshotHands([null, second])), [null, second]);
+    assert.deepEqual(recordedHands(first), [first, null]);
+});
+
+test('both live hands hold distinct objects and losing one only releases its object', () => {
+    recording(1);
     drag(hand(prism!.x, prism!.y), 'live');
     drag(hand(man.x, man.y), 'live_1');
     assert.equal(prism!.grabbedBy, 'live');
@@ -47,132 +57,97 @@ test('each live hand holds one distinct object, and losing one only releases its
     drag(null, 'live');
     assert.equal(prism!.grabbedBy, null);
     assert.equal(man.grabbedBy, 'live_1');
-    drag(null, 'live_1');
-    assert.equal(man.grabbedBy, null);
-    drag(hand(man.x, man.y), 'live');
-    drag(hand(man.x, man.y), 'live_1');
-    assert.equal(man.grabbedBy, 'live', 'both hands cannot own the same object');
 });
 
-test('second hand cannot take a reserved clone object before the clone picks it up', () => {
-    idle(2);
-    gameState.mode = 'RECORDING';
-    gameState.recordedEchoes = [[null]];
-    drag(hand(plate!.x, plate!.y), 'live_1');
+test('both past hands replay distinct objects and neither live hand can steal them', () => {
+    recording(2);
+    const first = hand(lever.x, lever.handleY), second = hand(plate!.x, plate!.y);
+    gameState.recordedEchoes[0].push(snapshotHands([first, second]));
+    drag(first, 'live');
+    drag(second, 'live_1');
+    drag(null, 'live');
     drag(null, 'live_1');
     gameState.mode = 'PLAYING';
     resetLevel();
-    drag(hand(plate!.x, plate!.y), 'live_1');
-    assert.equal(plate!.grabbedBy, null);
-    drag(hand(plate!.x, plate!.y), 'ghost_0');
-    assert.equal(plate!.grabbedBy, 'ghost_0');
-});
-
-test('two-hand play keeps completed clones, discards partial recording and retains live objects', () => {
-    idle(3);
-    gameState.mode = 'RECORDING';
-    gameState.recordedEchoes = [[null]];
-    drag(hand(lever.x, lever.handleY), 'live');
-    drag(null, 'live');
-    const completed = gameState.recordedEchoes[0];
-    gameState.echoIndex = 1;
-    gameState.recordedEchoes.push([]);
-    resetLevel();
-    drag(hand(plate!.x, plate!.y), 'live');
-    const position = { x: plate!.x, y: plate!.y };
-    startTwoHandPlay(1000);
-    assert.equal(gameState.mode, 'PLAYING');
-    assert.equal(gameState.directPlay, true);
-    assert.deepEqual(gameState.recordedEchoes, [completed]);
-    assert.equal(plate!.grabbedBy, 'live');
-    assert.deepEqual({ x: plate!.x, y: plate!.y }, position);
-    drag(hand(lever.x, lever.handleY), 'live_1');
+    for (const actor of ['live', 'live_1']) {
+        drag(first, actor);
+        drag(second, actor);
+    }
     assert.equal(lever.grabbedBy, null);
-    drag(hand(lever.x, lever.handleY), 'ghost_0');
+    assert.equal(plate!.grabbedBy, null);
+    drag(first, 'ghost_0_1');
+    drag(second, 'ghost_0');
+    assert.equal(lever.grabbedBy, null, 'past hands cannot swap roles');
+    assert.equal(plate!.grabbedBy, null);
+    drag(first, 'ghost_0');
+    drag(second, 'ghost_0_1');
     assert.equal(lever.grabbedBy, 'ghost_0');
+    assert.equal(plate!.grabbedBy, 'ghost_0_1');
+    drag(null, 'ghost_0');
+    assert.equal(lever.grabbedBy, null);
+    assert.equal(plate!.grabbedBy, 'ghost_0_1');
+    drag(first, 'live_1');
+    assert.equal(lever.grabbedBy, null, 'reservation survives recorded hand loss');
 });
 
-test('direct play has a full timed round without clones and a correct score timer', () => {
-    idle(1);
-    startTwoHandPlay(1000);
-    assert.deepEqual(gameState.recordedEchoes, []);
-    assert.equal(playingTimeLeft(1000), 10000);
-    assert.equal(playingTimeLeft(3500), 7500);
-    assert.equal(playingTimeLeft(11000), 0);
-    gameState.mode = 'IDLE';
-    resetLevel();
-    assert.equal(gameState.directPlay, false, 'restarting restores one-hand recording mode');
-});
-
-test('switching to two hands rewinds displaced clone objects while preserving live objects', () => {
-    idle(3);
-    gameState.mode = 'RECORDING';
-    gameState.recordedEchoes = [[null]];
-    const pickup = hand(plate!.x, plate!.y);
+test('an object remains assigned to its original hand throughout recording', () => {
+    recording(1);
+    const pickup = hand(prism!.x, prism!.y);
     drag(pickup, 'live');
     drag(null, 'live');
-    gameState.echoIndex = 1;
-    gameState.recordedEchoes.push([]);
-    resetLevel();
-    plate!.x = 0.2;
-    plate!.y = 0.6;
-    plate!.grabbedBy = 'ghost_0';
-    drag(hand(lever.x, lever.handleY), 'live');
-    startTwoHandPlay(1000);
-    assert.equal(lever.grabbedBy, 'live');
-    assert.equal(plate!.grabbedBy, null);
-    drag(pickup, 'ghost_0');
-    assert.equal(plate!.grabbedBy, 'ghost_0', 'clone can reach its original pickup again');
+    drag(pickup, 'live_1');
+    assert.equal(prism!.grabbedBy, null);
+    drag(pickup, 'live');
+    assert.equal(prism!.grabbedBy, 'live');
 });
 
-test('moving laser keeps moving in direct play without any recorded frames', () => {
-    idle(2);
-    startTwoHandPlay(Date.now() - 1000);
-    evaluateRules();
-    const x = laser!.x;
-    gameState.playStartTime -= 500;
-    evaluateRules();
-    assert.notEqual(laser!.x, x);
-});
-
-test('level 1 can be completed by holding the prism and guiding the man with two live hands', () => {
-    idle(1);
-    startTwoHandPlay(Date.now());
-    drag(hand(prism!.x, prism!.y), 'live');
-    drag(hand(man.x, man.y), 'live_1');
-    for (let i = 0; i < 250; i++) {
-        drag(hand(0.5, 0.45), 'live');
-        drag(hand(0.85, 0.8), 'live_1');
-        evaluateRules();
+test('one or two live hands determine required loops without eliminating recording', () => {
+    for (const [level, single, dual] of [[1, 1, 1], [2, 2, 1], [3, 3, 2]]) {
+        recording(level);
+        assert.equal(recordingTarget(1), single);
+        assert.equal(recordingTarget(2), dual);
     }
-    assert.equal(crystal!.charged, true);
+});
+
+for (const level of [1, 2, 3]) {
+    test(`level ${level} cannot open its exit using only live hands`, () => {
+        recording(level);
+        gameState.mode = 'PLAYING';
+        gameState.recordedEchoes = [];
+        for (const object of levers) { object.handleY = object.y + 0.2; object.grabbedBy = 'live'; }
+        if (crystal) crystal.charged = true;
+        if (prism) prism.grabbedBy = 'live';
+        if (plate) plate.grabbedBy = 'live_1';
+        evaluateRules();
+        assert.equal(activeEchoCount(), 0);
+        assert.equal(door.open, false);
+    });
+}
+
+test('two hands of one past self count as one echo; level 3 needs two different past selves', () => {
+    recording(3);
+    gameState.mode = 'PLAYING';
+    levers.forEach((object, index) => { object.handleY = object.y + 0.2; object.grabbedBy = index ? 'ghost_0_1' : 'ghost_0'; });
+    evaluateRules();
+    assert.equal(activeEchoCount(), 1);
+    assert.equal(door.open, false);
+    plate!.grabbedBy = 'ghost_1';
+    evaluateRules();
+    assert.equal(activeEchoCount(), 2);
     assert.equal(door.open, true);
-    for (let i = 0; i < 50 && gameState.mode !== 'WON'; i++) {
-        drag(hand(0.5, 0.45), 'live');
-        drag(hand(door.x, door.y), 'live_1');
-        evaluateRules();
-    }
-    assert.equal(gameState.mode, 'WON');
-    assert.deepEqual(gameState.recordedEchoes, []);
-    assert.equal(gameState.deaths, 0);
 });
 
-test('level 2 can be completed with a moving shield and two live hands without clones', t => {
-    let now = 1000000;
-    t.mock.method(Date, 'now', () => now);
-    idle(2);
-    startTwoHandPlay(now);
-    drag(hand(plate!.x, plate!.y), 'live');
-    drag(hand(man.x, man.y), 'live_1');
-    const deathsBefore = gameState.deaths;
-    for (let i = 0; i < 200 && gameState.mode !== 'WON'; i++) {
-        now += 1000 / 60;
-        const targetX = 0.5 + Math.sin((now - gameState.playStartTime) / 1000 * 1.5) * 0.12;
-        drag(hand(targetX, 0.2), 'live');
-        drag(hand(i < 40 ? 0.8 : door.x, 0.8), 'live_1');
-        evaluateRules();
-    }
-    assert.equal(gameState.mode, 'WON');
-    assert.deepEqual(gameState.recordedEchoes, []);
-    assert.equal(gameState.deaths, deathsBefore);
+test('a missing second hand remains missing in replay without promoting or duplicating the first', () => {
+    const first = hand(0.2, 0.5);
+    const frame = snapshotHands([first, null]);
+    const restored = recordedHands(frame);
+    assert.deepEqual(restored[0], first);
+    assert.equal(restored[1], null);
+});
+
+test('score timer uses playback progress of the full two-hand recording', () => {
+    recording(1);
+    gameState.recordedEchoes = [Array.from({ length: 600 }, () => snapshotHands([null, null]))];
+    gameState.currentFrame = 150;
+    assert.equal(playingTimeLeft(), 7500);
 });

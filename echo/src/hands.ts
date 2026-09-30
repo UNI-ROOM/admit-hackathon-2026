@@ -5,6 +5,16 @@ export interface HandResults {
     multiHandedness?: { label: string; score: number }[];
 }
 
+export function snapshotHands(hands: [HandLandmarks | null, HandLandmarks | null]) {
+    return { hands: hands.map(hand => hand ? hand.map(point => ({ ...point })) : null) as typeof hands };
+}
+
+export function recordedHands(frame: import('./types').EchoFrame): [HandLandmarks | null, HandLandmarks | null] {
+    if (!frame) return [null, null];
+    // Accept original one-hand frames as well as new two-hand recordings.
+    return Array.isArray(frame) ? [frame, null] : frame.hands;
+}
+
 // Detection order can change between frames. Keep two persistent identities
 // using handedness, with wrist distance as a fallback when labels are uncertain.
 export class LiveHandTracker {

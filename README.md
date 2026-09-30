@@ -35,7 +35,7 @@ npm run dev
 
 ---
 
-### 🧪 Запуск Unit-тестов движка (31/31 passing, из них 16 — движковых)
+### 🧪 Запуск Unit-тестов движка (59/59 passing, из них 16 — движковых)
 Встроенный TypeScript test runner без сторонних тяжелых фреймворков:
 ```bash
 cd echo
@@ -46,11 +46,11 @@ npx --yes tsx --test
 
 ## 🎮 Gameplay & Levels
 
-### 👐 One or two hands
+### 👐 Record one or two hands — cooperate with the past
 
-Pinch with each hand to hold a different object. Show an open palm to start: one hand records a clone; two hands start a ten-second play round immediately. Adding a second hand during recording cancels the unfinished recording and starts play, keeping completed clones.
+Show an open palm to start a ten-second recording. Both hands are recorded independently and replayed by your echo in the next loop. Adding a second hand never cancels or skips RECORD. Each hand grabs its own object with a pinch; recorded objects stay reserved for their original past hand.
 
-Levels 1–2 can be completed without clones: hold the prism or shield with one hand and guide the little guy with the other. For Level 3, record one clone to hold the lever, then use both hands for the shield and the little guy. Clone objects remain reserved. Losing a hand releases only its object; the other hand keeps working.
+Every exit needs active help from an echo. Level 1 needs the recorded prism; Level 2 combines a lever, moving shield and rescue; Level 3 requires two levers, a moving shield and two different past selves. With one live hand, the levels use 1/2/3 recordings; with two hands, 1/1/2. Both recorded hands of one echo still count as one past self. Losing a hand releases only its object, and its absence is also recorded.
 
 The game is built on the concept of **"cooperating with your past self"**: you record a stretch of time while performing one action (e.g. holding a shield against a deadly laser), and on the next loop your clone replays that movement with millisecond precision while you carry out the second part of the task.
 
@@ -77,9 +77,9 @@ flowchart LR
    - The player aims the beam at a photon crystal until it's fully charged (100%), while the clone helps hold the components in place.
 3. **Level 2: Beam & Shield (Dynamic Defense)**:
    - A continuously oscillating deadly laser blocks the path to the exit.
-   - The clone holds a reflective energy shield, keeping the little guy from burning, while the live player leads him to the exit.
-4. **Level 3: Multi-Echo (Grand finale: 2 clones at once)**:
-   - Requires coordinating three entities: **Clone 1** (cyan) holds a gravity lever, **Clone 2** (purple) blocks a wandering laser with a shield, and the **live player** (amber) carefully evacuates the little guy.
+   - Hold the door lever and follow the moving laser with a shield. Your past hands replay these actions while you lead the little guy to the exit.
+4. **Level 3: Multi-Echo (Grand finale: at least 2 past selves)**:
+   - Coordinate two gravity levers, a moving shield and the rescue. At least two different echoes must actively help. One hand records three loops; two hands record two loops, with both past hands replayed independently.
 
 ---
 
@@ -145,13 +145,13 @@ flowchart LR
 
 ## 🧪 Тестирование и Надежность
 
-- **31/31 Unit-тестов** (16 — движковых): Покрывают распознавание жестов (включая новый 4-й жест «указательный палец»), подавление дребезга (`StateStabilizer`), арбитраж мульти-агентов, оптику преломления и логику условий победы.
+- **59/59 Unit-тестов** (16 — движковых): Покрывают распознавание жестов (включая новый 4-й жест «указательный палец»), подавление дребезга (`StateStabilizer`), арбитраж мульти-агентов, оптику преломления и логику условий победы.
 - **Строгий TypeScript**: Никаких `any`-кастов в игровой логике, строгая типизация состояний (`mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON'`).
 - **StateStabilizer**: Алгоритм фильтрации шума камеры, требующий `N` устойчивых кадров для исключения ложных переключений состояний.
 
 ```bash
-# Запуск тестов (показан вывод движкового суита, всего 31 тест):
-$ cd echo && npx --yes tsx --test
+# Запуск тестов (показан вывод движкового суита, всего 59 тестов):
+$ npm test --prefix echo
 
   ✔ 1. Gesture: isOpenPalm returns true when 4 fingers extended above joints
   ✔ 2. Gesture: isOpenPalm returns false when any finger is curled
@@ -170,9 +170,9 @@ $ cd echo && npx --yes tsx --test
   ✔ 15. Gesture: isPointing returns true when index finger is extended and others are curled
   ✔ 16. Gesture: isPointing returns false when fingers are open, hand is a fist or landmarks are malformed
 
-ℹ tests 31
+ℹ tests 59
 ℹ suites 1
-ℹ pass 31
+ℹ pass 59
 ℹ fail 0
 ```
 
