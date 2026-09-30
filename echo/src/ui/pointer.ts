@@ -37,8 +37,9 @@ let lastClick = 0;
 let dialogsOnTop = -1;
 
 // Outside gameplay the cursor follows any visible hand and dwell works with any
-// hand pose; in gameplay both need an explicit pointing gesture, so grabbing
-// objects neither shows the cursor nor clicks the HUD.
+// hand pose — open, pinched or thumb on middle finger. While objects are being
+// grabbed it needs pointing or the thumb–middle touch, so grabbing never clicks
+// the HUD.
 let uiContext = () => true;
 export function setUiContext(fn: () => boolean): void { uiContext = fn; }
 
@@ -127,7 +128,9 @@ export function handlePointer(hands: (HandLandmarks | null)[]): void {
     }
 
     const cooling = now - lastClick < CLICK_COOLDOWN_MS;
-    const canDwell = (ui || pointing) && !touching && !dwellLock && !cooling;
+    // Holding a pinch or touch on a button selects it too: a touch that started
+    // off-target still clicks once the cursor has rested on a button for 1 s.
+    const canDwell = (ui || pointing || touching) && !dwellLock && !cooling;
     let progress = 0;
     if (touching && !wasTouching && !cooling) {
         if (target?.isConnected) activate(target, now);

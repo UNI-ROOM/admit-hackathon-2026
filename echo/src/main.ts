@@ -455,7 +455,13 @@ onEnterGame(() => {
     hands.setOptions({ maxNumHands: gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL' ? 1 : 2 });
     void ensureCamera();
 });
-setUiContext(() => current() !== 'game' || gameState.mode === 'IDLE' || !!document.querySelector('dialog[open]'));
+// Pinch grabs objects while recording/replaying clones and in the tutorial drag
+// step; everywhere else the hand cursor behaves as in the menus.
+setUiContext(() => {
+    const grabbing = gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING'
+        || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 2);
+    return current() !== 'game' || !grabbing || !!document.querySelector('dialog[open]');
+});
 
 show('menu');
 void ensureCamera();
