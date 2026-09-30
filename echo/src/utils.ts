@@ -43,10 +43,16 @@ export function isOpenPalm(landmarks: any[]) {
     return straight === 4 && landmarks[0].y < 0.8;
 }
 
-export function isPinching(landmarks: any[]) {
-    const thumb = landmarks[4];
-    const index = landmarks[8];
-    return Math.sqrt(Math.pow(thumb.x - index.x, 2) + Math.pow(thumb.y - index.y, 2)) < 0.08;
+// The palm provides a scale reference, so moving nearer/further from the
+// camera does not change the gesture. A wider release threshold avoids chatter.
+export function isPinching(landmarks: any[] | null, wasPinching = false) {
+    if (!landmarks || landmarks.length < 21) return false;
+    const distance = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
+    const palm = Math.hypot(landmarks[0].x - landmarks[9].x, landmarks[0].y - landmarks[9].y);
+    const threshold = palm > 0.01
+        ? Math.min(wasPinching ? 0.12 : 0.08, palm * (wasPinching ? 0.7 : 0.45))
+        : wasPinching ? 0.11 : 0.08;
+    return distance < threshold;
 }
 
 // UI click: thumb tip touching the middle fingertip. Measured relative to hand

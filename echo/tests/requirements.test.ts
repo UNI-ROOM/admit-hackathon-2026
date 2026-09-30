@@ -34,6 +34,7 @@ test('Free-movement mechanics are intact (x, y float coordinates)', () => {
         {x: man.x + 0.01, y: man.y + 0.01}, // 4 (thumb tip)
         {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, // 5-7
         {x: man.x + 0.01, y: man.y + 0.01}, // 8 (index tip)
+        ...Array.from({ length: 12 }, () => ({ x: 0, y: 0 })), // remaining joints
     ];
     
     const initialManX = man.x;

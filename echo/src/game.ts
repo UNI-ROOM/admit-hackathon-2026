@@ -721,7 +721,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     }
 }
 
-export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string) {
+export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string, drawLinks = true) {
     if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
         const recording = gameState.recordedEchoes[gameState.echoIndex];
         if (recording && !recordedObjects.has(recording)) recordedObjects.set(recording, new Map());
@@ -742,7 +742,7 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
         return;
     }
 
-    const pinch = isPinching(handLandmarks);
+    const pinch = isPinching(handLandmarks, wasHolding);
     const px = (handLandmarks[4].x + handLandmarks[8].x) / 2;
     const py = (handLandmarks[4].y + handLandmarks[8].y) / 2;
 
@@ -781,48 +781,56 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             man.x += (px - man.x) * 0.15; 
             man.y += (py - man.y) * 0.15;
             
-            ctx.beginPath();
-            ctx.moveTo(px * canvasWidth, py * canvasHeight);
-            ctx.lineTo(man.x * canvasWidth, man.y * canvasHeight);
-            ctx.strokeStyle = agentColor;
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            if (drawLinks) {
+                ctx.beginPath();
+                ctx.moveTo(px * canvasWidth, py * canvasHeight);
+                ctx.lineTo(man.x * canvasWidth, man.y * canvasHeight);
+                ctx.strokeStyle = agentColor;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            }
         }
         for (const lever of levers) if (lever.grabbedBy === agentId) {
             lever.handleY = Math.max(lever.y, Math.min(lever.y + 0.2, py));
             
-            ctx.beginPath();
-            ctx.moveTo(px * canvasWidth, py * canvasHeight);
-            ctx.lineTo(lever.x * canvasWidth, lever.handleY * canvasHeight);
-            ctx.strokeStyle = agentColor;
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            if (drawLinks) {
+                ctx.beginPath();
+                ctx.moveTo(px * canvasWidth, py * canvasHeight);
+                ctx.lineTo(lever.x * canvasWidth, lever.handleY * canvasHeight);
+                ctx.strokeStyle = agentColor;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            }
         }
         if (plate && plate.grabbedBy === agentId) {
             plate.x += (px - plate.x) * 0.15;
             plate.y += (py - plate.y) * 0.15;
             
-            ctx.beginPath();
-            ctx.moveTo(px * canvasWidth, py * canvasHeight);
-            ctx.lineTo(plate.x * canvasWidth, plate.y * canvasHeight);
-            ctx.strokeStyle = agentColor;
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            if (drawLinks) {
+                ctx.beginPath();
+                ctx.moveTo(px * canvasWidth, py * canvasHeight);
+                ctx.lineTo(plate.x * canvasWidth, plate.y * canvasHeight);
+                ctx.strokeStyle = agentColor;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            }
         }
         if (prism && prism.grabbedBy === agentId) {
             prism.x += (px - prism.x) * 0.15;
             prism.y += (py - prism.y) * 0.15;
             
-            ctx.beginPath();
-            ctx.moveTo(px * canvasWidth, py * canvasHeight);
-            ctx.lineTo(prism.x * canvasWidth, prism.y * canvasHeight);
-            ctx.strokeStyle = agentColor;
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            if (drawLinks) {
+                ctx.beginPath();
+                ctx.moveTo(px * canvasWidth, py * canvasHeight);
+                ctx.lineTo(prism.x * canvasWidth, prism.y * canvasHeight);
+                ctx.strokeStyle = agentColor;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
+            }
         }
     } else {
         if (man.grabbedBy === agentId) man.grabbedBy = null;
@@ -872,7 +880,7 @@ export function drawTutorial(ctx: CanvasRenderingContext2D, canvasWidth: number,
     }
 }
 
-export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null) {
+export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, drawLinks = true) {
     const wasHolding = tutorialBox.grabbedBy === 'live';
     if (!handLandmarks) {
         tutorialBox.grabbedBy = null;
@@ -881,7 +889,7 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
         }
         return;
     }
-    const pinch = isPinching(handLandmarks);
+    const pinch = isPinching(handLandmarks, wasHolding);
     const px = (handLandmarks[4].x + handLandmarks[8].x) / 2;
     const py = (handLandmarks[4].y + handLandmarks[8].y) / 2;
     
@@ -897,12 +905,14 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
             tutorialBox.x = px;
             tutorialBox.y = py;
             
-            ctx.beginPath();
-            ctx.moveTo(px * canvasWidth, py * canvasHeight);
-            ctx.lineTo(tutorialBox.x * canvasWidth, tutorialBox.y * canvasHeight);
-            ctx.strokeStyle = '#f97316';
-            ctx.lineWidth = 4;
-            ctx.stroke();
+            if (drawLinks) {
+                ctx.beginPath();
+                ctx.moveTo(px * canvasWidth, py * canvasHeight);
+                ctx.lineTo(tutorialBox.x * canvasWidth, tutorialBox.y * canvasHeight);
+                ctx.strokeStyle = '#f97316';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
         }
     } else {
         tutorialBox.grabbedBy = null;

@@ -220,7 +220,8 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
         { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 },
         { x: 0.505, y: 0.505 },
         { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 },
-        { x: 0.505, y: 0.505 }
+        { x: 0.505, y: 0.505 },
+        ...Array.from({ length: 12 }, () => ({ x: 0, y: 0 }))
     ];
     handleDragAndDrop(mockCtx, 1000, 1000, handNearMan, 'live');
     assert.strictEqual(man.grabbedBy, 'live', 'Man should be grabbed');
@@ -230,7 +231,8 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
             { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 },
             { x: pos.x, y: pos.y },
             { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 },
-            { x: pos.x, y: pos.y }
+            { x: pos.x, y: pos.y },
+            ...Array.from({ length: 12 }, () => ({ x: 0, y: 0 }))
         ];
         const prevX = man.x;
         const prevY = man.y;

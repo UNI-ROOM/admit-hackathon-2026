@@ -1,6 +1,8 @@
 import { initializeAccount, showResult, closePanel, panelOpen } from './ui/account';
 import { handlePointer, setUiContext } from './ui/pointer';
 import './style.css';
+import { FixedStepClock } from './loop';
+import { loadTrackingRuntime, HANDS_ASSETS } from './tracking-runtime';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
 import {
     gameState, man, levers, tutorialBox, tutorialTarget,
@@ -12,9 +14,9 @@ import { LEVELS, getLevelConfig } from './levels';
 import type { EchoFrame } from './types';
 import { playSfx, unlockAudioContext } from './audio';
 import { t } from './i18n';
-import { LiveHandTracker, snapshotHands, recordedHands, playableHands, type HandResults } from './hands';
+import { LiveHandTracker, HandInputBuffer, snapshotHands, recordedHands, playableHands, type HandResults } from './hands';
 import { getSettings, subscribe as subscribeSettings } from './settings';
-import { show, current, onEnterGame } from './scenes/router';
+import { show, current, onEnterGame, onChange } from './scenes/router';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
 import { setHandStatus, setStatusMessage, setCameraStarted } from './scenes/menu';
 import { isPaused } from './scenes/pause';
@@ -41,8 +43,9 @@ function getIdleInstruction(level: number): string {
 }
 
 function resizeCanvas() {
-    canvasElement.width = window.innerWidth;
-    canvasElement.height = window.innerHeight;
+    const scale = Math.min(1, 1920 / window.innerWidth, 1080 / window.innerHeight);
+    canvasElement.width = Math.round(window.innerWidth * scale);
+    canvasElement.height = Math.round(window.innerHeight * scale);
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -54,17 +57,28 @@ function applyMirrorSetting() {
 applyMirrorSetting();
 subscribeSettings(() => applyMirrorSetting());
 
-const fistStabilizer = new StateStabilizer(150, false);
+const fistStabilizer = new StateStabilizer(300, false);
 const hintStabilizer = new StateStabilizer(15, "");
 
 let handModelReady = false;
 const handTracker = new LiveHandTracker();
+const handInput = new HandInputBuffer();
+const frameClock = new FixedStepClock();
+function writeText(element: HTMLElement, value: string): void {
+    if (element.textContent !== value) element.textContent = value;
+}
+function writeHtml(element: HTMLElement, value: string): void {
+    if (element.innerHTML !== value) element.innerHTML = value;
+}
+function writeClass(element: HTMLElement, value: string): void {
+    if (element.className !== value) element.className = value;
+}
 
-function replayFrame(frame: EchoFrame | undefined, echoIndex: number): void {
+function replayFrame(frame: EchoFrame | undefined, echoIndex: number, render: boolean): void {
     for (const [handIndex, hand] of recordedHands(frame || null).entries()) {
         const agentId = `ghost_${echoIndex}${handIndex ? '_1' : ''}`;
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, hand, agentId);
-        if (hand && getSettings().showSkeleton) {
+        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, hand, agentId, render);
+        if (render && hand && getSettings().showSkeleton) {
             drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: getAgentColor(agentId), lineWidth: 4});
             drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 4});
         }
@@ -86,54 +100,62 @@ function startRound(action: 'record' | 'play'): void {
     const config = getActiveLevel();
     if (action === 'record') {
         beginRecording(Date.now(), latestHandCount);
-        modeIndicator.innerText = gameState.maxEchoes > 1
-            ? t('recording.startMulti', { i: 1, max: gameState.maxEchoes }) : t('recording.start');
-        modeIndicator.className = 'status-box text-2xl font-bold text-red-500 recording';
+        writeText(modeIndicator, gameState.maxEchoes > 1
+            ? t('recording.startMulti', { i: 1, max: gameState.maxEchoes }) : t('recording.start'));
+        writeClass(modeIndicator, 'status-box text-2xl font-bold text-red-500 recording');
         gameState.baseInstruction = Array.isArray(config.hintRecording)
             ? config.hintRecording[0] : config.hintRecording || t('recording.continueDefault');
     } else {
         beginLivePlay(Date.now());
-        modeIndicator.innerText = t('playing.liveTick', { time: 10 });
-        modeIndicator.className = 'status-box text-2xl font-bold text-cyan-400 playing';
+        writeText(modeIndicator, t('playing.liveTick', { time: 10 }));
+        writeClass(modeIndicator, 'status-box text-2xl font-bold text-cyan-400 playing');
         gameState.baseInstruction = t(`round.liveHint${gameState.currentLevel}`);
     }
-    instruction.innerHTML = gameState.baseInstruction;
+    writeHtml(instruction, gameState.baseInstruction);
     if (roundActions) roundActions.hidden = true;
 }
 
 function onResults(results: HandResults) {
-    const trackedHands = handTracker.update(results);
-    const liveHands = playableHands(trackedHands, gameState.difficulty);
-    latestHandCount = liveHands.filter(Boolean).length;
-    const liveHand = liveHands[0] || liveHands[1];
-    const liveAgent = liveHands[0] ? 'live' : 'live_1';
-    const twoHands = liveHands.every(Boolean);
-
-    // The hand cursor drives the whole interface (menus, dialogs, HUD).
-    handlePointer(liveHands);
-
+    handInput.update(handTracker.update(results), Date.now());
+    if (detectionFailed) { detectionFailed = false; setCameraStarted(); }
     if (!handModelReady) {
         handModelReady = true;
         setHandStatus('ready');
     }
+}
+
+function processFrame(render: boolean) {
+    const now = Date.now();
+    const visible = playableHands(handInput.visible(now), gameState.difficulty);
+    const trackedHands = handInput.read(now);
+    const liveHands = playableHands(trackedHands, gameState.difficulty);
+    latestHandCount = visible.filter(Boolean).length;
+    const liveHand = liveHands[0] || liveHands[1];
+    const liveAgent = liveHands[0] ? 'live' : 'live_1';
+    const twoHands = visible.every(Boolean);
+    // Menus use actual visible hands; occlusion grace only protects gameplay.
+    if (render) handlePointer(visible);
 
     // While the menu/level-select scenes are showing, the camera may still be
     // running in the background (we don't stop it on scene switch), but the
     // game loop must not mutate gameState or draw on the canvas.
     if (current() !== 'game') {
+        // Additional scenes can use stabilized input without changing the 2D
+        // difficulty rules or starting another camera/model instance.
+        if (render) window.dispatchEvent(new CustomEvent('echo:hands', { detail: trackedHands }));
         return;
     }
 
     if (roundActions) roundActions.hidden = gameState.mode !== 'IDLE';
     canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    if (render) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     if (gameState.mode === 'WON') {
-        drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
+        if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
         canvasCtx.restore();
-        modeIndicator.innerText = t('mode.success');
-        modeIndicator.className = "status-box text-2xl font-bold text-green-400 playing";
-        instruction.innerHTML = t('win.instructionMulti');
+        writeText(modeIndicator, t('mode.success'));
+        writeClass(modeIndicator, "status-box text-2xl font-bold text-green-400 playing");
+        writeHtml(instruction, t('win.instructionMulti'));
 
         // Reset after 8 seconds
         if (!gameState['wonTimeoutSet']) {
@@ -169,12 +191,10 @@ function onResults(results: HandResults) {
         return;
     }
 
-    if (panelOpen() || isPaused()) { drawWorld(canvasCtx, canvasElement.width, canvasElement.height); canvasCtx.restore(); return; }
-
-    const now = Date.now();
+    if (panelOpen() || isPaused()) { if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height); canvasCtx.restore(); return; }
 
     if (liveHand && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING' || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 3))) {
-        if (fistStabilizer.update(isFist(liveHand))) {
+        if (fistStabilizer.update(isFist(liveHand) && !isPinching(liveHand, true))) {
             fistStabilizer.currentStableValue = false;
             fistStabilizer.candidateValue = false;
             fistStabilizer.consecutiveCount = 0;
@@ -186,21 +206,21 @@ function onResults(results: HandResults) {
                 gameState.tutorialStep = 4;
                 resetLevel();
                 gameState.baseInstruction = t('tutorial.step4.instruction');
-                modeIndicator.innerText = t('tutorial.step4.indicator');
+                writeText(modeIndicator, t('tutorial.step4.indicator'));
             } else {
                 gameState.resets++;
                 gameState.mode = 'IDLE';
                 resetLevel();
-                modeIndicator.innerText = t('mode.idle');
-                modeIndicator.className = "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]";
+                writeText(modeIndicator, t('mode.idle'));
+                writeClass(modeIndicator, "status-box text-2xl font-bold flex items-center justify-center min-w-[250px]");
                 gameState.baseInstruction = getIdleInstruction(gameState.currentLevel);
             }
-            instruction.innerHTML = gameState.baseInstruction;
+            writeHtml(instruction, gameState.baseInstruction);
             canvasCtx.restore();
             return;
         }
 
-        if (fistStabilizer.candidateValue === true && fistStabilizer.consecutiveCount > 0) {
+        if (render && fistStabilizer.candidateValue === true && fistStabilizer.consecutiveCount > 0) {
             const wrist = liveHand[0];
             const px = wrist.x * canvasElement.width;
             const py = wrist.y * canvasElement.height;
@@ -217,21 +237,23 @@ function onResults(results: HandResults) {
         }
     }
 
+    if (!liveHand) fistStabilizer.update(false);
+
     if (gameState.mode === 'TUTORIAL') {
         if (gameState.tutorialStep === 1) {
             if (liveHand && isOpenPalm(liveHand)) {
                 gameState.tutorialStep = 2;
                 gameState.baseInstruction = t('tutorial.step2.instruction');
-                modeIndicator.innerText = t('tutorial.step2.indicator');
+                writeText(modeIndicator, t('tutorial.step2.indicator'));
             }
         } else if (gameState.tutorialStep === 2) {
-            handleTutorialDrag(canvasCtx, canvasElement.width, canvasElement.height, liveHand);
+            handleTutorialDrag(canvasCtx, canvasElement.width, canvasElement.height, liveHand, render);
             if (!tutorialBox.grabbedBy) {
                 const dist = Math.sqrt(Math.pow(tutorialBox.x - tutorialTarget.x, 2) + Math.pow(tutorialBox.y - tutorialTarget.y, 2));
                 if (dist < tutorialTarget.radius) {
                     gameState.tutorialStep = 3;
                     gameState.baseInstruction = t('tutorial.step3.instruction');
-                    modeIndicator.innerText = t('tutorial.step3.indicator');
+                    writeText(modeIndicator, t('tutorial.step3.indicator'));
                 }
             }
         }
@@ -246,9 +268,9 @@ function onResults(results: HandResults) {
         gameState.maxEchoes = targetRecordings;
         const timeLeft = Math.ceil((gameState.RECORD_DURATION - (now - gameState.recordStartTime))/1000);
         if (gameState.maxEchoes > 1) {
-            modeIndicator.innerText = t('recording.tickMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes, time: timeLeft });
+            writeText(modeIndicator, t('recording.tickMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes, time: timeLeft }));
         } else {
-            modeIndicator.innerText = t('recording.tick', { time: timeLeft });
+            writeText(modeIndicator, t('recording.tick', { time: timeLeft }));
         }
 
         if (now - gameState.recordStartTime > gameState.RECORD_DURATION) {
@@ -260,25 +282,25 @@ function onResults(results: HandResults) {
                 resetLevel({ preserveProgress: true });
                 gameState.maxEchoes = targetRecordings;
 
-                modeIndicator.innerText = t('recording.startMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
+                writeText(modeIndicator, t('recording.startMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes }));
                 const config = getActiveLevel();
                 if (Array.isArray(config?.hintRecording) && config.hintRecording.length > gameState.echoIndex) {
                     gameState.baseInstruction = config.hintRecording[gameState.echoIndex];
                 } else {
                     gameState.baseInstruction = t('recording.echoContinue', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
                 }
-                instruction.innerHTML = gameState.baseInstruction;
+                writeHtml(instruction, gameState.baseInstruction);
             } else {
                 gameState.mode = 'PLAYING';
                 gameState.playStartTime = now;
                 gameState.currentFrame = 0;
                 resetLevel({ preserveProgress: true });
 
-                modeIndicator.innerText = t('mode.loop');
-                modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";
+                writeText(modeIndicator, t('mode.loop'));
+                writeClass(modeIndicator, "status-box text-2xl font-bold text-cyan-400 playing");
                 const config = getActiveLevel();
                 gameState.baseInstruction = config?.hintPlaying || t('playing.defaultHint');
-                instruction.innerHTML = gameState.baseInstruction;
+                writeHtml(instruction, gameState.baseInstruction);
             }
         } else {
             if (!gameState.recordedEchoes[gameState.echoIndex]) {
@@ -291,7 +313,7 @@ function onResults(results: HandResults) {
             const currentRecFrame = gameState.recordedEchoes[gameState.echoIndex].length - 1;
             for (let i = 0; i < gameState.echoIndex; i++) {
                 const echo = gameState.recordedEchoes[i];
-                replayFrame(echo?.[Math.min(currentRecFrame, echo.length - 1)], i);
+                replayFrame(echo?.[Math.min(currentRecFrame, echo.length - 1)], i, render);
             }
         }
     }
@@ -300,11 +322,11 @@ function onResults(results: HandResults) {
 
         for (let i = 0; i < gameState.recordedEchoes.length; i++) {
             const echo = gameState.recordedEchoes[i];
-            replayFrame(echo?.[gameState.currentFrame], i);
+            replayFrame(echo?.[gameState.currentFrame], i, render);
         }
 
         if (gameState.livePlay) {
-            modeIndicator.innerText = t('playing.liveTick', { time: Math.ceil(playingTimeLeft(now) / 1000) });
+            writeText(modeIndicator, t('playing.liveTick', { time: Math.ceil(playingTimeLeft(now) / 1000) }));
         } else {
             gameState.currentFrame++;
         }
@@ -314,15 +336,15 @@ function onResults(results: HandResults) {
             gameState.echoIndex = 0;
             resetLevel();
             gameState.resets++;
-            modeIndicator.innerText = t('mode.fail');
-            modeIndicator.className = "status-box text-2xl font-bold text-red-500";
+            writeText(modeIndicator, t('mode.fail'));
+            writeClass(modeIndicator, "status-box text-2xl font-bold text-red-500");
             gameState.baseInstruction = t('fail.instruction');
         }
     }
 
     if (gameState.mode !== 'IDLE') {
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[0], 'live');
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[1], 'live_1');
+        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[0], 'live', render);
+        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[1], 'live_1', render);
     }
 
     let currentHint = "";
@@ -395,13 +417,13 @@ function onResults(results: HandResults) {
     }
 
     if (deathBanner.text && Date.now() < deathBanner.until) {
-        instruction.innerHTML = `<b class='text-red-500'>${deathBanner.text}</b>`;
+        writeHtml(instruction, `<b class='text-red-500'>${deathBanner.text}</b>`);
     } else {
         const stableHint = hintStabilizer.update(currentHint);
-        instruction.innerHTML = (getSettings().hints && stableHint) ? stableHint : gameState.baseInstruction;
+        writeHtml(instruction, (getSettings().hints && stableHint) ? stableHint : gameState.baseInstruction);
     }
 
-    for (const [index, hand] of liveHands.entries()) if (hand) {
+    for (const [index, hand] of liveHands.entries()) if (render && hand) {
         const isPinch = isPinching(hand);
         const color = getAgentColor(index === 0 ? 'live' : 'live_1');
         if (getSettings().showSkeleton) {
@@ -411,50 +433,118 @@ function onResults(results: HandResults) {
     }
 
     if (gameState.mode === 'TUTORIAL') {
-        drawTutorial(canvasCtx, canvasElement.width, canvasElement.height);
+        if (render) drawTutorial(canvasCtx, canvasElement.width, canvasElement.height);
     } else {
         evaluateRules();
-        drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
+        if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
     }
 
     canvasCtx.restore();
 }
 
-const hands = new Hands({locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
-hands.onResults(onResults);
+// Animation continues smoothly while camera inference runs at a lower rate.
+function animate(timestamp: number): void {
+    requestAnimationFrame(animate);
+    if (document.hidden) { frameClock.reset(); return; }
+    const steps = frameClock.advance(timestamp);
+    for (let step = 0; step < steps; step++) processFrame(step === steps - 1);
+}
+requestAnimationFrame(animate);
+onChange(scene => {
+    handInput.reset();
+    frameClock.reset();
+    if (scene !== 'game') hands?.setOptions({ maxNumHands: 2 });
+});
 
-// The camera starts with the menu so the interface can be driven by hand;
-// entering the game retries if access was refused earlier.
+let hands: any = null;
+let trackingReady: Promise<void> | null = null;
 let camera: any = null;
 let cameraStarted = false;
+let cameraStarting: Promise<void> | null = null;
+let detectionPending = false;
+let lastDetectionAt = -Infinity;
+let detectionFailed = false;
 
-async function ensureCamera() {
+async function initializeTracking(): Promise<void> {
+    if (hands) return;
+    if (!trackingReady) {
+        trackingReady = (async () => {
+            await loadTrackingRuntime();
+            const model = new Hands({ locateFile: (file: string) => HANDS_ASSETS + file });
+            model.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+            model.onResults(onResults);
+            hands = model;
+        })().finally(() => { trackingReady = null; });
+    }
+    await trackingReady;
+}
+
+// Camera requests and model inference cannot overlap. Lower menu frequency and
+// a 640x480 stream leave CPU/GPU time for rendering and two-hand tracking.
+async function ensureCamera(): Promise<void> {
     if (cameraStarted) return;
-    cameraStarted = true;
-    if (!camera) {
-        camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 1280, height: 720
-        });
-    }
-    try {
-        await camera.start();
-    } catch {
-        cameraStarted = false;
-        instruction.textContent = t('camera.unavailable');
-        setStatusMessage(t('status.cameraBlocked'));
-        if (current() === 'game') show('menu');
-        return;
-    }
-    setCameraStarted();
+    if (cameraStarting) return cameraStarting;
+    cameraStarting = (async () => {
+        try {
+            await initializeTracking();
+        } catch {
+            setStatusMessage(t('camera.unavailable'));
+            return;
+        }
+        hands.setOptions({ maxNumHands: current() === 'game' && (gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL') ? 1 : 2 });
+        if (!camera) {
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    const now = performance.now();
+                    const interval = current() === 'game' && !isPaused() ? 1000 / 30 : 1000 / 15;
+                    if (document.hidden || detectionPending || now - lastDetectionAt < interval) return;
+                    lastDetectionAt = now;
+                    detectionPending = true;
+                    try {
+                        await hands.send({ image: videoElement });
+                    } catch {
+                        handInput.reset();
+                        if (!detectionFailed) setStatusMessage(t('camera.unavailable'));
+                        detectionFailed = true;
+                    } finally {
+                        detectionPending = false;
+                    }
+                },
+                width: 640, height: 480
+            });
+        }
+        try {
+            await camera.start();
+            cameraStarted = true;
+            setCameraStarted();
+        } catch {
+            writeText(instruction, t('camera.unavailable'));
+            setStatusMessage(t('status.cameraBlocked'));
+            if (current() === 'game') show('menu');
+        }
+    })().finally(() => { cameraStarting = null; });
+    return cameraStarting;
 }
 onEnterGame(() => {
-    hands.setOptions({ maxNumHands: gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL' ? 1 : 2 });
+    hands?.setOptions({ maxNumHands: gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL' ? 1 : 2 });
     void ensureCamera();
 });
+
+// Freeze recording/live timers while the tab is hidden, discard stale hands,
+// and resume without a physics/echo catch-up burst.
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+    frameClock.reset();
+    handInput.reset();
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && !isPaused()) {
+        const elapsed = Date.now() - hiddenAt;
+        if (gameState.recordStartTime) gameState.recordStartTime += elapsed;
+        if (gameState.playStartTime) gameState.playStartTime += elapsed;
+    }
+    hiddenAt = 0;
+});
+
 // Pinch grabs objects while recording/replaying clones and in the tutorial drag
 // step; everywhere else the hand cursor behaves as in the menus.
 setUiContext(() => {

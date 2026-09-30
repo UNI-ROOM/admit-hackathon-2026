@@ -8,20 +8,18 @@
     <meta property="og:title" content="Vencera Echo Game">
     <meta property="og:description" content="Cooperate with your past self using only a webcam. Built at ADMIT Hackathon 2026.">
     <meta property="og:image" content="/brand/admit-hackathon.jpg">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
 </head>
 <body>
     <section id="scene-menu" class="scene menu-scene"></section>
     <section id="scene-levels" class="scene levels-scene" hidden></section>
 
     <div id="game-container" hidden>
-        <video id="webcam" autoplay playsinline></video>
+        <video id="webcam" autoplay playsinline muted></video>
         <canvas id="game-canvas"></canvas>
 
         <div id="ui-layer">
