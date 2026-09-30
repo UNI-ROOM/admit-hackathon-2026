@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LiveHandTracker, snapshotHands, recordedHands, playableHands } from '../src/hands';
 import { gameState, resetLevel, handleDragAndDrop, recordingTarget, playingTimeLeft,
-    evaluateRules, activeEchoCount, getActiveLevel, beginRecording, beginLivePlay, man, plate, prism, levers, lever, door, crystal } from '../src/game';
+    evaluateRules, activeEchoCount, getActiveLevel, beginRecording, beginLivePlay, RESERVE_HOLD_STEPS, man, plate, prism, levers, lever, door, crystal } from '../src/game';
 
 const ctx = new Proxy({} as CanvasRenderingContext2D, { get: () => () => {}, set: () => true });
 const hand = (x: number, y: number) => Array.from({ length: 21 }, () => ({ x, y, z: 0 }));
@@ -65,8 +65,10 @@ test('both past hands replay distinct objects and neither live hand can steal th
     recording(2);
     const first = hand(lever.x, lever.handleY), second = hand(plate!.x, plate!.y);
     gameState.recordedEchoes[0].push(snapshotHands([first, second]));
-    drag(first, 'live');
-    drag(second, 'live_1');
+    for (let i = 0; i <= RESERVE_HOLD_STEPS; i++) {
+        drag(first, 'live');
+        drag(second, 'live_1');
+    }
     drag(null, 'live');
     drag(null, 'live_1');
     gameState.mode = 'PLAYING';
@@ -95,7 +97,7 @@ test('both past hands replay distinct objects and neither live hand can steal th
 test('an object remains assigned to its original hand throughout recording', () => {
     recording(1);
     const pickup = hand(prism!.x, prism!.y);
-    drag(pickup, 'live');
+    for (let i = 0; i <= RESERVE_HOLD_STEPS; i++) drag(pickup, 'live');
     drag(null, 'live');
     drag(pickup, 'live_1');
     assert.equal(prism!.grabbedBy, null);

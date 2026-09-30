@@ -105,13 +105,34 @@ function canGrab(object: Entity, objectId: ReplayObject, agentId: string): boole
     return true;
 }
 
-function grab(object: Entity, objectId: ReplayObject, agentId: string): void {
+// A recording reserves an object for its clone only after a deliberate grab:
+// held for 0.5 s (30 fixed 60 Hz steps) or dragged 5% of the screen.
+// A brief accidental pinch while passing by leaves the object free.
+export const RESERVE_HOLD_STEPS = 30;
+export const RESERVE_MOVE = 0.05;
+const pendingGrabs = new Map<string, { objectId: ReplayObject; steps: number; x: number; y: number }>();
+
+function grab(object: Entity, objectId: ReplayObject, agentId: string, px: number, py: number): void {
     object.grabbedBy = agentId;
     if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
-        const recording = gameState.recordedEchoes[gameState.echoIndex];
-        if (recording) recordedObjects.get(recording)?.set(objectId, agentId);
+        pendingGrabs.set(agentId, { objectId, steps: 0, x: px, y: py });
     }
     playSfx('grab');
+}
+
+function updatePendingGrab(agentId: string, holding: boolean, px: number, py: number): void {
+    const pending = pendingGrabs.get(agentId);
+    if (!pending) return;
+    if (!holding || gameState.mode !== 'RECORDING') {
+        pendingGrabs.delete(agentId);
+        return;
+    }
+    pending.steps++;
+    if (pending.steps >= RESERVE_HOLD_STEPS || Math.hypot(px - pending.x, py - pending.y) > RESERVE_MOVE) {
+        const recording = gameState.recordedEchoes[gameState.echoIndex];
+        if (recording) recordedObjects.get(recording)?.set(pending.objectId, agentId);
+        pendingGrabs.delete(agentId);
+    }
 }
 
 export function getActiveLevel() {
@@ -311,6 +332,7 @@ export function triggerManDeath(message: string = t('death.default')) {
 }
 
 export function resetLevel({ preserveProgress = false }: { preserveProgress?: boolean } = {}) {
+    pendingGrabs.clear();
     // Recording transitions start a new loop, while completed hard-mode goals persist.
     // Retries and level changes use the default full reset.
     const keepProgress = preserveProgress && gameState.difficulty === 'hard';
@@ -750,6 +772,7 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
                        (prism?.grabbedBy === agentId);
 
     if (!handLandmarks) {
+        pendingGrabs.delete(agentId);
         if (man.grabbedBy === agentId) man.grabbedBy = null;
         for (const lever of levers) if (lever.grabbedBy === agentId) lever.grabbedBy = null;
         if (plate && plate.grabbedBy === agentId) plate.grabbedBy = null;
@@ -767,30 +790,28 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
     if (pinch) {
         let grabbedAnything = wasHolding;
 
-        if (!grabbedAnything && canGrab(man, 'man', agentId)) {
-            if (Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2)) < 0.15) {
-                grab(man, 'man', agentId);
+        // Grab the nearest object in reach, not the first in a fixed order:
+        // the shield lying next to the man must not pick up the man instead.
+        if (!grabbedAnything) {
+            const toBox = (o: { x: number; y: number; width: number; height: number }) =>
+                Math.hypot(Math.max(0, Math.abs(px - o.x) - o.width / 2), Math.max(0, Math.abs(py - o.y) - o.height / 2));
+            const candidates: [Entity, ReplayObject, number, number][] = [
+                [man, 'man', Math.hypot(px - man.x, py - man.y), 0.15],
+                ...levers.map((l, index): [Entity, ReplayObject, number, number] =>
+                    [l, `lever_${index}`, Math.hypot(px - l.x, py - l.handleY), 0.15]),
+            ];
+            if (plate) candidates.push([plate, 'plate', toBox(plate), 0.1]);
+            if (prism) candidates.push([prism, 'prism', toBox(prism), 0.1]);
+            let best: [Entity, ReplayObject, number, number] | null = null;
+            for (const c of candidates) {
+                if (c[2] < c[3] && (!best || c[2] < best[2]) && canGrab(c[0], c[1], agentId)) best = c;
+            }
+            if (best) {
+                grab(best[0], best[1], agentId, px, py);
                 grabbedAnything = true;
             }
         }
-        for (const [index, lever] of levers.entries()) if (!grabbedAnything && canGrab(lever, `lever_${index}`, agentId)) {
-            if (Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) < 0.15) {
-                grab(lever, `lever_${index}`, agentId);
-                grabbedAnything = true;
-            }
-        }
-        if (!grabbedAnything && plate && canGrab(plate, 'plate', agentId)) {
-            if (Math.abs(px - plate.x) < plate.width/2 + 0.1 && Math.abs(py - plate.y) < plate.height/2 + 0.1) {
-                grab(plate, 'plate', agentId);
-                grabbedAnything = true;
-            }
-        }
-        if (!grabbedAnything && prism && canGrab(prism, 'prism', agentId)) {
-            if (Math.abs(px - prism.x) < prism.width/2 + 0.1 && Math.abs(py - prism.y) < prism.height/2 + 0.1) {
-                grab(prism, 'prism', agentId);
-                grabbedAnything = true;
-            }
-        }
+        updatePendingGrab(agentId, grabbedAnything, px, py);
 
         const agentColor = getAgentColor(agentId);
         const agentName = getAgentName(agentId);
@@ -851,6 +872,7 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             }
         }
     } else {
+        pendingGrabs.delete(agentId);
         if (man.grabbedBy === agentId) man.grabbedBy = null;
         for (const lever of levers) if (lever.grabbedBy === agentId) lever.grabbedBy = null;
         if (plate && plate.grabbedBy === agentId) plate.grabbedBy = null;
