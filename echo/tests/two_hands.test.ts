@@ -104,7 +104,7 @@ test('an object remains assigned to its original hand throughout recording', () 
 });
 
 test('one or two live hands determine required loops without eliminating recording', () => {
-    for (const [level, single, dual] of [[1, 1, 1], [2, 2, 1], [3, 3, 2]]) {
+    for (const [level, single, dual] of [[1, 1, 1], [2, 2, 1], [3, 3, 1]]) {
         recording(level);
         assert.equal(recordingTarget(1), single);
         assert.equal(recordingTarget(2), dual);

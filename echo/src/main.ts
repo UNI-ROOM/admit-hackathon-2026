@@ -257,7 +257,7 @@ function onResults(results: HandResults) {
                 gameState.recordedEchoes[gameState.echoIndex] = [];
                 gameState.recordStartTime = now;
                 gameState.currentFrame = 0;
-                resetLevel();
+                resetLevel({ preserveProgress: true });
                 gameState.maxEchoes = targetRecordings;
 
                 modeIndicator.innerText = t('recording.startMulti', { i: gameState.echoIndex + 1, max: gameState.maxEchoes });
@@ -272,7 +272,7 @@ function onResults(results: HandResults) {
                 gameState.mode = 'PLAYING';
                 gameState.playStartTime = now;
                 gameState.currentFrame = 0;
-                resetLevel();
+                resetLevel({ preserveProgress: true });
 
                 modeIndicator.innerText = t('mode.loop');
                 modeIndicator.className = "status-box text-2xl font-bold text-cyan-400 playing";

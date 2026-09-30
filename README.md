@@ -52,9 +52,9 @@ Choose **Easy · 1 hand** or **Hard · 2 hands** on each level card. Easy restor
 
 Choose **PLAY NOW** to start a ten-second live attempt without recording, or **RECORD ECHO** (also triggered by an open palm) to capture past hands. Easy records one hand; Hard records both. The next loop replays their actions, and recorded objects stay reserved for the original past hand. Adding a second hand never cancels a recording.
 
-The exit checks the puzzle itself: the crystal is charged and every lever present is held down. It does not require a fixed number of echoes. Reaching an open exit also wins during RECORD, without waiting for the recording to end. An unfinished recording is not counted as a replayed echo in the score.
+The exit checks the puzzle itself: the crystal is charged and every lever present is down. Hard-mode levers lock when fully pulled, freeing your hands; completed levers and a charged crystal persist through recording transitions. Easy-mode levers still need to be held. It does not require a fixed number of echoes. Reaching an open exit also wins during RECORD, without waiting for the recording to end. An unfinished recording is not counted as a replayed echo in the score.
 
-For full recording sequences, Easy uses 1/1/2 loops; Hard uses 1/1/2 with two hands (1/2/3 with one). Recording remains useful when you need more helping hands. Losing a hand releases only its own object and is preserved in the recording.
+For full recording sequences, Easy uses 1/1/2 loops; Hard uses 1/1/1 with two hands (1/2/3 with one). Recording remains useful when you need more helping hands. Losing a hand releases only its own object and is preserved in the recording.
 
 The game is built on the concept of **"cooperating with your past self"**: you record a stretch of time while performing one action (e.g. holding a shield against a deadly laser), and on the next loop your clone replays that movement with millisecond precision while you carry out the second part of the task.
 

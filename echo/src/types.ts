@@ -122,7 +122,7 @@ export interface LevelConfig {
     crystal?: { x: number, y: number, width: number, height: number };
     prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
     maxEchoes?: number;
-    minRecordings?: number;
+    latchLevers?: boolean;
     hintIdle?: string;
     hintRecording?: string | string[];
     hintPlaying?: string;

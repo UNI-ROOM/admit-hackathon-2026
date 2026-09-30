@@ -145,7 +145,7 @@ export function recordingTarget(handCount: number): number {
     const level = getActiveLevel();
     const hands = gameState.difficulty === 'hard' && handCount >= 2 ? 2 : 1;
     const tasks = (level.levers?.length ?? (level.lever ? 1 : 0)) + Number(!!level.plate) + Number(!!level.prism) + 1;
-    return Math.min(level.maxEchoes || 1, Math.max(level.minRecordings || 1, Math.ceil((tasks - hands) / hands)));
+    return Math.min(level.maxEchoes || 1, Math.max(1, Math.ceil((tasks - hands) / hands)));
 }
 
 export function playingTimeLeft(now = Date.now()): number {
@@ -307,7 +307,12 @@ export function triggerManDeath(message: string = t('death.default')) {
     }
 }
 
-export function resetLevel() {
+export function resetLevel({ preserveProgress = false }: { preserveProgress?: boolean } = {}) {
+    // Recording transitions start a new loop, while completed hard-mode goals persist.
+    // Retries and level changes use the default full reset.
+    const keepProgress = preserveProgress && gameState.difficulty === 'hard';
+    const completedLevers = keepProgress ? levers.map(object => object.active) : [];
+    const chargedCrystal = keepProgress && !!crystal?.charged;
     gameState.winTimeLeftMs = null;
     gameState.winEchoesUsed = 0;
     if (gameState.mode === 'IDLE' || gameState.mode === 'TUTORIAL') gameState.livePlay = false;
@@ -317,7 +322,10 @@ export function resetLevel() {
     gameState.maxEchoes = lvl.maxEchoes || 1;
     man = { x: lvl.man.x, y: Math.min(lvl.man.y, 0.8), grabbedBy: null, color: '#facc15' };
     
-    levers = (lvl.levers || (lvl.lever ? [lvl.lever] : [])).map(p => ({ ...p, handleY: p.y, grabbedBy: null, active: false }));
+    levers = (lvl.levers || (lvl.lever ? [lvl.lever] : [])).map((p, index) => ({
+        ...p, handleY: p.y + (completedLevers[index] ? 0.2 : 0),
+        grabbedBy: null, active: !!completedLevers[index]
+    }));
     lever = levers[0] || { x: -1, y: -1, handleY: -1, grabbedBy: null, active: false };
     lastDeathTime = 0;
     
@@ -342,8 +350,8 @@ export function resetLevel() {
             baseY: lvl.crystal.y,
             width: lvl.crystal.width,
             height: lvl.crystal.height,
-            charge: 0,
-            charged: false,
+            charge: chargedCrystal ? 1 : 0,
+            charged: chargedCrystal,
             grabbedBy: null
         };
     } else {
@@ -363,6 +371,7 @@ export function resetLevel() {
         prism = null;
     }
 
+    door.open = levers.every(object => object.active) && (!crystal || crystal.charged);
     reflectedLaser = { active: false, startX: 0, startY: 0, endX: 0, endY: 0 };
     deathBanner = { text: '', until: 0 };
 }
@@ -925,13 +934,19 @@ export function evaluateRules() {
         else if (prism.y > floor_y) prism.y = floor_y;
     }
 
-    // Lever logic
+    // Hard-mode levers lock down once completed, freeing both hands for rescue.
+    const latchLevers = getActiveLevel().latchLevers;
     for (const lever of levers) {
-        if (!lever.grabbedBy && lever.handleY > lever.y) {
-            lever.handleY = Math.max(lever.y, lever.handleY - 0.02);
-        }
         const wasActive = lever.active;
-        lever.active = lever.handleY >= lever.y + 0.18;
+        if (latchLevers && (wasActive || lever.handleY >= lever.y + 0.18)) {
+            lever.handleY = lever.y + 0.2;
+            lever.active = true;
+        } else {
+            if (!lever.grabbedBy && lever.handleY > lever.y) {
+                lever.handleY = Math.max(lever.y, lever.handleY - 0.02);
+            }
+            lever.active = lever.handleY >= lever.y + 0.18;
+        }
         if (!wasActive && lever.active) {
             playSfx('switch');
         }
