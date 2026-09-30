@@ -27,6 +27,9 @@ export function unlockAudioContext(): void {
 
 // Auto-unlock on first user gesture/interaction anywhere on the page
 if (typeof window !== 'undefined') {
+    // Eagerly pre-load audio file in memory
+    getMusicAudio();
+
     const events = ['click', 'pointerdown', 'keydown', 'touchstart', 'mousemove', 'pointermove', 'focus'];
     const unlocker = () => {
         unlockAudioContext();
@@ -77,8 +80,10 @@ function getMusicAudio(): HTMLAudioElement | null {
     if (typeof window === 'undefined') return null;
     if (!musicAudio) {
         musicAudio = new Audio('/bg-music.mp3');
+        musicAudio.preload = 'auto';
         musicAudio.loop = true;
         musicAudio.volume = musicVolume;
+        musicAudio.load();
     }
     return musicAudio;
 }
