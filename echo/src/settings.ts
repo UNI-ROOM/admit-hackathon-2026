@@ -2,6 +2,7 @@
 // Persisted to localStorage under 'vencera.settings'.
 
 import { setSfxEnabled, setMusicEnabled, setMusicVolume } from './audio';
+import { browserLanguage } from './i18n';
 
 export interface Settings {
     sfx: boolean;
@@ -23,7 +24,7 @@ const DEFAULT_SETTINGS: Settings = {
     mirror: true,
     showSkeleton: true,
     hints: true,
-    language: 'en',
+    language: browserLanguage(),
     cameraDeviceId: null
 };
 

@@ -1,14 +1,32 @@
 // Intro scene shown before the menu and sign-up: welcomes the jury and
 // introduces the two developers.
 
-import { STRINGS } from '../i18n';
+import { t, LANG } from '../i18n';
+import { updateSettings } from '../settings';
 import { show } from './router';
 
 const container = document.getElementById('scene-intro');
 
-// The jury screen is always Russian, independent of the game language.
-const t = (key: string, params?: Record<string, string>): string =>
-    Object.entries(params ?? {}).reduce((text, [k, v]) => text.split(`{${k}}`).join(v), STRINGS.ru[key] ?? key);
+// EN | RU switch for the whole game. Strings are resolved at load, so the
+// choice is saved and the page reloads (back on this screen).
+function languageSwitch(): HTMLElement {
+    const root = el('div', 'intro-lang');
+    root.setAttribute('role', 'group');
+    root.setAttribute('aria-label', 'Language / Язык');
+    for (const [code, label] of [['en', 'EN'], ['ru', 'RU']] as const) {
+        const b = el('button', 'intro-lang-btn', label);
+        b.type = 'button';
+        b.dataset.dwell = '';
+        b.setAttribute('aria-pressed', String(code === LANG));
+        b.onclick = () => {
+            if (code === LANG) return;
+            updateSettings({ language: code });
+            location.reload();
+        };
+        root.append(b);
+    }
+    return root;
+}
 
 interface Member {
     nickname: string;
@@ -63,7 +81,7 @@ function render(): void {
     go.dataset.dwell = '';
     go.onclick = () => show('menu');
 
-    container.replaceChildren(text, el('h2', 'intro-team-title', t('intro.team')), team, go);
+    container.replaceChildren(languageSwitch(), text, el('h2', 'intro-team-title', t('intro.team')), team, go);
 }
 
 render();

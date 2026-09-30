@@ -1,5 +1,17 @@
 // Tiny i18n module: no external libraries, dotted keys, {name}-style interpolation.
-export const LANG: 'en' | 'ru' = 'en';
+// Browser language for first-time visitors, then the language saved in
+// settings ('vencera.settings'). Strings are resolved at load, so switching
+// language reloads the page.
+export function browserLanguage(): 'en' | 'ru' {
+    try { return /^ru\b/i.test(globalThis.navigator?.language ?? '') ? 'ru' : 'en'; } catch { return 'en'; }
+}
+function savedLanguage(): 'en' | 'ru' {
+    try {
+        const saved = JSON.parse(globalThis.localStorage?.getItem('vencera.settings') ?? 'null')?.language;
+        return saved === 'ru' || saved === 'en' ? saved : browserLanguage();
+    } catch { return browserLanguage(); }
+}
+export const LANG: 'en' | 'ru' = savedLanguage();
 
 type Dict = Record<string, string>;
 

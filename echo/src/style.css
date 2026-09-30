@@ -369,3 +369,9 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .intro-site:hover, .intro-site:focus-visible { text-decoration: underline; }
 .intro-continue { margin-top: .5rem; }
 @media (max-width: 640px) { .intro-card { width: min(240px, 42vw); padding: 10px; } .intro-scene { justify-content: flex-start; } }
+
+/* Intro language switch, top-right of the welcome screen. */
+.intro-lang { position: absolute; top: 20px; right: 24px; display: flex; border: 1px solid #2a2a2a; border-radius: 999px; padding: 3px; background: rgba(0, 0, 0, .6); }
+.intro-lang-btn { min-width: 52px; min-height: 36px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; color: var(--muted); font: 11px var(--font-pixel); letter-spacing: 1px; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.intro-lang-btn:hover, .intro-lang-btn:focus-visible { color: var(--fg); outline: none; }
+.intro-lang-btn[aria-pressed="true"] { background: var(--accent); color: #fff; }
