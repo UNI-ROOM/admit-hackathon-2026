@@ -1,23 +1,31 @@
 #!/usr/bin/env bash
+# Install container runtime. Does not switch traffic or stop the existing API.
 set -euo pipefail
-cd "$(dirname "$0")/.."
 sudo apt-get update
-sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg rsync build-essential python3
-curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y ca-certificates curl gnupg rsync python3
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+. /etc/os-release
+printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu %s stable\n' "$(dpkg --print-architecture)" "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 sudo apt-get update
-sudo apt-get install -y caddy nodejs
-sudo install -d -o azureuser -g azureuser /srv/echo/web /srv/echo/api /srv/echo/data /srv/echo/shared
-sudo install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-sudo install -m 644 deploy/echo-api.service /etc/systemd/system/echo-api.service
-sudo systemctl daemon-reload
-sudo systemctl enable echo-api
-printf '%s\n' 'azureuser ALL=(root) NOPASSWD: /usr/bin/systemctl restart echo-api' | sudo tee /etc/sudoers.d/echo >/dev/null
-sudo chmod 440 /etc/sudoers.d/echo
-sudo visudo -cf /etc/sudoers.d/echo
-if [ ! -f /srv/echo/api/.env ]; then
-    (umask 077; printf '%s\n' 'NODE_ENV=production' 'PUBLIC_ORIGIN=https://vencera.jeanark.dev' 'DB_PATH=/srv/echo/data/echo.db' 'PORT=3000' 'MAIL_FROM=ECHO <echo@vencera.jeanark.dev>' > /srv/echo/api/.env)
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker azureuser
+sudo install -d -o azureuser -g azureuser -m 750 /srv/echo/containers /srv/echo/backups
+# Caddy already exists on the current VM. New hosts also need Caddy and DNS/TLS setup.
+sudo docker version --format '{{.Server.Version}}'
+sudo docker compose version
+
+# This VM has 892 MiB RAM. Swap covers short deployment peaks; containers are capped.
+if ! sudo swapon --show=NAME --noheadings | grep -q '^/swapfile-echo$'; then
+    if [ ! -e /swapfile-echo ]; then
+        sudo fallocate -l 1G /swapfile-echo
+        sudo chmod 600 /swapfile-echo
+        sudo mkswap /swapfile-echo
+    fi
+    sudo swapon /swapfile-echo
+fi
+if ! grep -q '^/swapfile-echo ' /etc/fstab; then
+    printf '%s\n' '/swapfile-echo none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
 fi

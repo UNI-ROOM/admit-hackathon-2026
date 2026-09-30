@@ -25,26 +25,36 @@
 
 ## Локальный запуск
 
-Node.js 22. В двух терминалах из корня репозитория:
+Docker Engine + Compose:
 
 ```bash
+cp .env.example .env
+# Укажи случайный POSTGRES_PASSWORD в .env (openssl rand -hex 32).
+docker compose up -d --build --wait
+```
+
+Открой http://127.0.0.1:8080. Запускаются **три отдельных контейнера**: `web` (nginx и собранный фронт), `api` (Node 22 + Hono), `postgres` (PostgreSQL 17). База хранится в volume `echo_pgdata`. Обычный `docker compose down` сохраняет данные; флаг `-v` удаляет их.
+
+Без ключа Resend доступны гости, очки, прогресс и лидерборд. Для почты заполни `RESEND_API_KEY` и `MAIL_FROM` в корневом `.env`. В production используется `ECHO <echo@vencera.jeanark.dev>`. Секреты не попадают в образы и git.
+
+Разработка с Vite и Node 22 вне Docker:
+
+```bash
+docker compose -f compose.test.yml up -d --wait
 npm ci --prefix server
 cp server/.env.example server/.env
 npm run dev --prefix server
-```
-
-```bash
+# Во втором терминале:
 npm ci --prefix echo
 npm run dev --prefix echo
 ```
 
-Открой http://localhost:5173. Vite проксирует `/api` на `127.0.0.1:3000`. Без ключа Resend доступны гости, очки, прогресс и лидерборд; запрос кода возвращает понятную ошибку. Для почты заполни `RESEND_API_KEY` и `MAIL_FROM` в `server/.env`. В production используется уже верифицированный домен `vencera.jeanark.dev`, отправитель `ECHO <echo@vencera.jeanark.dev>`. Секреты не коммитятся.
-
-Только игру можно запустить командой `docker compose up --build`. В этом варианте API не запускается: игра работает с сообщением «Офлайн, результаты не сохраняются». Docker не проверен на целевом сервере; production использует systemd.
+Vite доступен на http://localhost:5173 и проксирует `/api` на `127.0.0.1:3000`. В этом варианте API использует отдельную локальную PostgreSQL на порту 55432. Её тестовый volume — tmpfs, данные исчезают при удалении контейнера. Для постоянных локальных данных используй основной Compose.
 
 ## Проверки
 
 ```bash
+docker compose -f compose.test.yml up -d --wait
 npm test --prefix echo
 npm run build --prefix echo
 npm run check --prefix server
@@ -55,26 +65,41 @@ npm test --prefix server
 
 ## API и данные
 
-Hono + SQLite (WAL), один Node-процесс. Cookie `echo_sid`: HttpOnly, SameSite=Lax, Secure в production, срок 30 дней. Токены сессий и коды хранятся как хеши. Код действует 10 минут, допускает пять попыток, отправка ограничена разом в минуту на адрес и общим лимитом.
+Hono + PostgreSQL 17, пул из пяти соединений. Транзакции защищают запись результатов, слияние гостей и однократное использование кода. Cookie `echo_sid`: HttpOnly, SameSite=Lax, Secure в production, срок 30 дней. Токены сессий и коды хранятся как хеши. Код действует 10 минут, допускает пять попыток, отправка ограничена разом в минуту на адрес и общим лимитом.
 
 Роуты: `/api/session`, `/api/me`, `/api/auth/request`, `/api/auth/verify`, `/api/auth/logout`, `/api/runs`, `/api/progress`, `/api/leaderboard`, `/api/health`. Точный контракт — [docs/08-implementation.md](docs/08-implementation.md).
 
 Общая формула в `shared/score.ts`: `max(0, 1000 + round(timeLeftMs / 10) + (maxEchoes - echoesUsed) * 300 - deaths * 150 - resets * 50)`. Лидерборд суммирует лучшие результаты по уровням. Сервер пересчитывает очки и ограничивает метрики, но не проверяет воспроизведение игры: это не полноценная защита от читов.
 
-## Деплой
+## CI/CD и production
 
-`deploy/setup-server.sh` устанавливает Node 22, Caddy, systemd-юнит и каталоги `/srv/echo/{web,api,shared,data}` на Ubuntu. Требуются открытые 80/443 и DNS `vencera.jeanark.dev`, направленный на сервер. Скрипт рассчитан на выделенную VM и пользователя `azureuser`.
+`push` в `main` запускает `.github/workflows/deploy.yml`:
 
-`.github/workflows/deploy.yml` проверяет оба приложения и публикует push в main. Секреты GitHub: `SSH_KEY`, `SSH_HOST`, `SSH_USER`, `SSH_KNOWN_HOSTS` (проверенный ключ хоста). Зависимости API устанавливаются на Linux-сервере, чтобы не переносить нативный модуль SQLite с другой платформы. `.env` и база не перезаписываются rsync. Почтовый ключ хранится только в `/srv/echo/api/.env` с правами 600.
+1. **Test** — тесты фронта, TypeScript, API и миграции на настоящей PostgreSQL.
+2. **Build** — отдельные Docker-образы `echo-web:<commit>` и `echo-api:<commit>`; затем проверка собранного стека с базой и гостевой сессией.
+3. **Deploy** — образы доставляются по SSH на VM; делается `pg_dump`, Compose обновляет контейнеры и ждёт healthcheck. Если обновление не прошло, возвращаются предыдущие образы приложения.
 
-API слушает только `127.0.0.1:3000`, снаружи доступен через Caddy. Бэкап: SQLite backup API либо `sqlite3 /srv/echo/data/echo.db '.backup /path/to/backup.db'`; не копируй один файл активной WAL-базы.
+Pull request запускает проверки и сборку без production-деплоя. Образы собираются на GitHub runner, а не на VM. Они передаются архивом, поэтому отдельный registry и его токен не требуются. Секреты GitHub прежние: `SSH_KEY`, `SSH_HOST`, `SSH_USER`, `SSH_KNOWN_HOSTS`.
+
+```mermaid
+flowchart LR
+    Browser[Браузер HTTPS] --> Caddy[Caddy на хосте :443]
+    Caddy --> Web[web: nginx :80]
+    Web --> API[api: Hono :3000]
+    API --> DB[(postgres:5432)]
+    DB --> Volume[Постоянный volume]
+```
+
+Caddy сохраняет HTTPS и сертификаты. Только фронт опубликован на `127.0.0.1:8080`; API и PostgreSQL доступны внутри Docker-сетей. PostgreSQL не имеет публичного порта. На VM настроены лимиты памяти контейнеров и 1 ГБ swap.
+
+Конфигурация и runtime-секреты: `/srv/echo/containers/.env` (права 600). Релиз: `/srv/echo/containers/.release`. PostgreSQL хранится в volume; образы и деплой не перезаписывают данные. Старый systemd API отключается после проверенного переноса SQLite. Инструкция миграции, бэкапа и отката — [docs/09-containers.md](docs/09-containers.md).
 
 ## Структура
 
 - `echo/` — Vite + TypeScript + Canvas + MediaPipe Hands.
-- `server/` — API, SQLite, вход через Resend.
+- `server/` — API, PostgreSQL, вход через Resend.
 - `shared/` — формула очков и лимиты клонов.
-- `deploy/` — Caddy, systemd, подготовка VM.
+- `deploy/` — Caddy, подготовка Docker, миграция данных и выпуск релизов.
 - `docs/` — концепция, план реализации и материалы сдачи.
 - Корневой `index.html` — исторический прототип; production собирается из `echo/`.
 

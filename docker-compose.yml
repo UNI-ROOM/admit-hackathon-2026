@@ -1,16 +1,80 @@
+name: echo
 services:
-  echo-game:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: echo
+      POSTGRES_USER: echo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    command: [postgres, -c, shared_buffers=32MB, -c, max_connections=30, -c, work_mem=2MB]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U echo -d echo']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 256m
+    restart: unless-stopped
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  api:
+    image: echo-api:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://echo:${POSTGRES_PASSWORD}@postgres:5432/echo
+      HOST: 0.0.0.0
+      PORT: '3000'
+      NODE_ENV: ${NODE_ENV:-development}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://127.0.0.1:8080}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-ECHO <echo@vencera.jeanark.dev>}
+      NODE_OPTIONS: --max-old-space-size=160
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [frontend, database]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 10s
+    mem_limit: 256m
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging: *logging
+
+  web:
+    image: echo-web:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: echo/Dockerfile
-      target: dev
-    container_name: echo-game
-    volumes:
-      - ./echo:/app/echo
-      - ./shared:/app/shared:ro
-      - /app/echo/node_modules
+      target: prod
     ports:
-      - "127.0.0.1:${PORT:-5173}:5173"
-    environment:
-      - CHOKIDAR_USEPOLLING=true
+      - '127.0.0.1:${WEB_PORT:-8080}:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [frontend]
+    mem_limit: 64m
+    security_opt: [no-new-privileges:true]
     restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+networks:
+  frontend:
+  database:
+    internal: true
