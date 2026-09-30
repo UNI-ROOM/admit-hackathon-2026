@@ -1,4 +1,3 @@
-import { isPointing } from '../utils';
 import { api, type Session, type RunPayload } from '../api';
 import { levelScore, LEVEL_ECHOES } from '../../../shared/score';
 import { t } from '../i18n';
@@ -70,14 +69,3 @@ export function closePanel(){panel.close();}
 export function panelOpen(){return panel.open;}
 render();
 
-const cursor=document.createElement('div');cursor.className='dwell-cursor';cursor.hidden=true;document.body.append(cursor);
-let dwellTarget: HTMLButtonElement | null=null;let dwellStart=0;
-export function handleDwell(hand:any[]|null){
- if(!hand||!isPointing(hand)){cursor.hidden=true;dwellTarget=null;return;}
- const x=(1-hand[8].x)*window.innerWidth;const y=hand[8].y*window.innerHeight;
- cursor.hidden=false;cursor.style.left=`${x}px`;cursor.style.top=`${y}px`;
- const target=document.elementFromPoint(x,y)?.closest<HTMLButtonElement>('button[data-dwell]')||null;
- if(!target||target.disabled){dwellTarget=null;return;}
- if(target!==dwellTarget){dwellTarget=target;dwellStart=Date.now();}
- else if(Date.now()-dwellStart>=1000){dwellTarget=null;target.click();}
-}
