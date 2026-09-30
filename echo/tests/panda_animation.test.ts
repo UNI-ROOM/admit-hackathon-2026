@@ -70,3 +70,41 @@ test('a short pinch greets the player, while a normal carry does not trigger a g
     assert.equal(panda.animator.playful, false);
     w.dispose();
 });
+
+test('resting an open hand on the panda closes its eyes and gently moves its head without picking it up', () => {
+    const { w, panda, input, advance } = setup();
+    advance(1);
+    input.hovered = true; advance(.1);
+    assert.equal(panda.animator.petting, false, 'nearby attention alone is not petting');
+    input.petting = true; advance(.4);
+    assert.equal(panda.animator.mood, 'petting');
+    assert.ok(panda.animator.eyeOpenness.every(eye => eye < .3));
+    assert.equal(panda.animator.playful, false, 'petting does not trigger the click greeting');
+    assert.ok(Math.abs(panda.body.position.y) < .03);
+    const head = panda.head.rotation.toArray(); advance(.3);
+    assert.notDeepEqual(panda.head.rotation.toArray(), head);
+    assert.equal(input.x, 3); assert.equal(input.z, 1.5); assert.equal(input.held, false);
+    const frozen = panda.head.rotation.toArray(), clock = panda.animator.elapsed;
+    panda.animator.update(0, { ...input, petting: false });
+    assert.deepEqual(panda.head.rotation.toArray(), frozen); assert.equal(panda.animator.elapsed, clock);
+    input.petting = input.hovered = false; advance(.5);
+    assert.equal(panda.animator.petting, false); assert.equal(panda.animator.mood, 'idle');
+    assert.ok(panda.animator.eyeOpenness.every(eye => eye > .8));
+    w.dispose();
+});
+
+test('gripping, laser contact, victory and reset take priority over petting', () => {
+    const { w, panda, input, advance } = setup();
+    advance(1); input.petting = true; advance(.4);
+    input.held = true; advance(.05);
+    assert.equal(panda.animator.mood, 'pickup'); assert.equal(panda.animator.petting, false);
+    advance(.5); assert.equal(panda.animator.mood, 'carry');
+    input.held = false; input.mistakes++; advance(.05);
+    assert.equal(panda.animator.mood, 'hurt'); assert.equal(panda.animator.petting, false);
+    advance(1); assert.equal(panda.animator.petting, true);
+    input.won = true; advance(.05);
+    assert.equal(panda.animator.mood, 'victory'); assert.equal(panda.animator.petting, false);
+    panda.animator.reset(); Object.assign(input, initial(), { petting: false }); advance(1);
+    assert.equal(panda.animator.petting, false); assert.ok(panda.animator.eyeOpenness.every(eye => eye > .8));
+    w.dispose();
+});

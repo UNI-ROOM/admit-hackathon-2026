@@ -10,7 +10,8 @@
     "test": "tsx --test",
     "test:browser": "node scripts/verify-3d.mjs",
     "test:mobile": "node scripts/verify-mobile-2d.mjs",
-    "test:2d-hands": "node scripts/verify-2d-hands.mjs"
+    "test:2d-hands": "node scripts/verify-2d-hands.mjs",
+    "test:panda-petting": "node scripts/verify-panda-petting.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

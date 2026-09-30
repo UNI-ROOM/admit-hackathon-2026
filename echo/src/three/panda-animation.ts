@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export interface PandaInput {
-    x: number; z: number; held: boolean; hovered: boolean;
+    x: number; z: number; held: boolean; hovered: boolean; petting?: boolean;
     charge: number; ready: boolean; mistakes: number; won: boolean;
     lookX: number; lookZ: number; rotation?: number;
 }
@@ -10,7 +10,7 @@ type Rig = {
     eyes: THREE.Group[]; ears: THREE.Mesh[]; mouth: THREE.Mesh;
     badge: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; sparks: THREE.InstancedMesh;
 };
-export type PandaMood = 'arrival' | 'idle' | 'curious' | 'charging' | 'ready' | 'pickup' | 'carry' | 'landing' | 'hurt' | 'victory';
+export type PandaMood = 'arrival' | 'idle' | 'curious' | 'petting' | 'charging' | 'ready' | 'pickup' | 'carry' | 'landing' | 'hurt' | 'victory';
 const clamp = (n: number, limit: number) => Math.max(-limit, Math.min(limit, n));
 
 /** Visual reactions only: the puzzle's position, grip and collision rules stay authoritative. */
@@ -23,12 +23,15 @@ export class PandaAnimator {
     private facing = 0;
     private affection = 0;
     private heldTime = 0;
+    private stroke = 0;
     private particle = new THREE.Object3D();
     mood: PandaMood = 'arrival';
     constructor(private rig: Rig) {}
-    reset() { this.clock = this.eventTime = this.vx = this.vz = this.facing = this.affection = this.heldTime = 0; this.previous = null; this.mood = 'arrival'; }
+    reset() { this.clock = this.eventTime = this.vx = this.vz = this.facing = this.affection = this.heldTime = this.stroke = 0; this.previous = null; this.mood = 'arrival'; }
     pet() { if (this.affection < .2) this.affection = 1.5; }
     get playful() { return this.affection > 0; }
+    get petting() { return this.mood === 'petting'; }
+    get eyeOpenness() { return this.rig.eyes.map(eye => eye.scale.y); }
     get elapsed() { return this.clock; }
     update(dt: number, input: PandaInput) {
         if (!(dt > 0) || !Number.isFinite(dt)) return;
@@ -44,8 +47,10 @@ export class PandaAnimator {
             : input.ready && !prev?.ready ? 'ready' : null;
         if (event) { this.mood = event; this.eventTime = 0; }
         const duration = this.mood === 'arrival' ? .85 : this.mood === 'hurt' ? .9 : this.mood === 'ready' ? 1.1 : this.mood === 'pickup' ? .35 : this.mood === 'landing' ? .5 : 0;
-        if (!input.won && this.eventTime > duration) this.mood = input.held ? 'carry' : input.hovered ? 'curious' : input.charge > .05 && !input.ready ? 'charging' : 'idle';
+        if (!input.won && this.eventTime > duration) this.mood = input.held ? 'carry' : input.petting ? 'petting' : input.hovered ? 'curious' : input.charge > .05 && !input.ready ? 'charging' : 'idle';
         const blend = 1 - Math.exp(-12 * dt);
+        if (input.held || input.won || this.mood === 'hurt') this.stroke = 0;
+        else this.stroke += (Number(this.petting) - this.stroke) * blend;
         const teleported = !prev || this.mood === 'hurt';
         const speedX = teleported ? 0 : clamp((input.x - prev.x) / dt, 5);
         const speedZ = teleported ? 0 : clamp((input.z - prev.z) / dt, 5);
@@ -68,6 +73,11 @@ export class PandaAnimator {
         }
         const happy = this.affection > 0 && !input.held && !input.won && this.mood !== 'hurt';
         if (happy) { lift += Math.max(0, Math.sin((1.5 - this.affection) * 5)) * .10; headTilt = -.13; eyeOpen = .65; }
+        // Relax into a resting open hand, without the wave used by a quick click.
+        lean += (Math.sin(t * 2.4) * .035 - lean) * this.stroke;
+        headTilt += (Math.sin(t * 2.9) * .07 - headTilt) * this.stroke;
+        armsUp += (.12 - armsUp) * this.stroke;
+        eyeOpen += (.18 - eyeOpen) * this.stroke;
         const blinkPhase = t % 4.3;
         if (blinkPhase > 3.8 && blinkPhase < 4.02) eyeOpen *= 1 - .94 * Math.sin((blinkPhase - 3.8) / .22 * Math.PI);
         const breathe = Math.sin(t * 2.5) * .008;
@@ -79,7 +89,9 @@ export class PandaAnimator {
         body.rotation.set(input.held ? this.vz * .035 : 0, this.facing + Math.sin(t * .7) * .025, lean);
         const look = input.held || input.won ? 0 : clamp((input.lookX - input.x) * .09, .28);
         head.rotation.y += (look - head.rotation.y) * blend;
-        head.rotation.x += ((this.mood === 'curious' ? -.1 : this.mood === 'charging' ? -.06 : clamp((input.lookZ - input.z) * .015, .08)) - head.rotation.x) * blend;
+        const lookPitch = this.mood === 'curious' ? -.1 : this.mood === 'charging' ? -.06 : clamp((input.lookZ - input.z) * .015, .08);
+        const headPitch = lookPitch + (.12 + Math.sin(t * 2.1) * .035 - lookPitch) * this.stroke;
+        head.rotation.x += (headPitch - head.rotation.x) * blend;
         head.rotation.z += (headTilt - head.rotation.z) * blend;
         for (let i = 0; i < 2; i++) {
             const side = i ? 1 : -1;
@@ -89,7 +101,7 @@ export class PandaAnimator {
             eyes[i].scale.y = Math.max(.05, eyeOpen);
             ears[i].rotation.z = side * Math.sin(t * 3 + i) * .09 + lean * .6;
         }
-        mouth.scale.set(input.won ? 1.3 : 1, this.mood === 'hurt' ? .35 : input.held ? 1.4 : 1, 1);
+        mouth.scale.set(input.won ? 1.3 : 1 + this.stroke * .15, this.mood === 'hurt' ? .35 : input.held ? 1.4 : 1 - this.stroke * .2, 1);
         badge.material.emissive.set(input.won || input.ready ? '#8adfff' : this.mood === 'hurt' ? '#ff8058' : '#7c8bf0');
         badge.material.emissiveIntensity = input.won ? 1.4 : .15 + input.charge * .8 + Math.sin(t * 3) * .08;
         sparks.visible = happy || input.won || this.mood === 'hurt' && e < .65 || this.mood === 'ready' && e < .8;
