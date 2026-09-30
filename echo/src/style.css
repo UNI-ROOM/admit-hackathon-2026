@@ -53,3 +53,20 @@ body { margin: 0; background-color: #050510; color: white; overflow: hidden; fon
 @media (prefers-reduced-motion: reduce) {
     .brief-scoop, .brief-hand, .brief-thumb, .brief-index, .brief-ring, .brief-spark { animation: none !important; }
 }
+.account-hud { position:fixed; top:90px; right:16px; z-index:30; display:flex; flex-wrap:wrap; gap:8px; max-width:min(480px,95vw); padding:10px; border-radius:12px; background:#101525e8; color:white; pointer-events:auto; font:14px system-ui; }
+.account-hud span:nth-child(2) { color:#fbbf24; }
+.account-hud button,.account-panel button { padding:7px 12px; border:1px solid #64748b; border-radius:8px; background:#24304c; color:white; cursor:pointer; }
+.account-panel { z-index:100; margin:auto; padding:24px; width:min(540px,94vw); max-height:85vh; overflow:auto; background:#101525; color:#fff; border:1px solid #64748b; border-radius:18px; font:16px system-ui; }
+.account-panel::backdrop { background:#0009; }
+.account-panel h2 { font-size:24px; margin-bottom:16px; }
+.account-panel p { margin:12px 0; }
+.account-panel form { display:grid; gap:12px; margin-top:20px; }
+.account-panel input { color:white; background:#1e293b; border:1px solid #64748b; padding:12px; border-radius:8px; }
+.account-panel table { width:100%; margin:20px 0; text-align:left; border-collapse:collapse; }
+.account-panel td,.account-panel th { padding:8px; border-bottom:1px solid #334155; }
+.account-panel .is-me { color:#67e8f9; }
+.account-panel [hidden],.account-hud [hidden] { display:none; }
+
+.dwell-cursor { position:fixed; z-index:1000; pointer-events:none; width:24px; height:24px; transform:translate(-50%,-50%); border:3px solid #67e8f9; border-radius:50%; }
+#mode-indicator { align-self:flex-start; padding:12px 24px; }
+.account-hud { top:104px; }

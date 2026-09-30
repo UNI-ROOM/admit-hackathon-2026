@@ -4,6 +4,7 @@ import { LEVELS } from './levels';
 import { playSfx } from './audio';
 
 export const gameState: GameState = {
+    deaths: 0, resets: 0, attemptStart: 0,
     mode: 'TUTORIAL', 
     tutorialStep: 1,
     frames: [], 
@@ -15,7 +16,7 @@ export const gameState: GameState = {
     recordStartTime: 0,
     RECORD_DURATION: 10000,
     currentLevel: 1,
-    baseInstruction: "ОБУЧЕНИЕ 1/3: Покажи полностью открытую ладонь!"
+    baseInstruction: "ОБУЧЕНИЕ 1/4: Покажи полностью открытую ладонь!"
 };
 
 export function getAgentColor(agentId: string): string {
@@ -44,6 +45,7 @@ export function getAgentName(agentId: string): string {
 
 export let man: Man = { x: 0.5, y: 0.8, grabbedBy: null, color: '#facc15' }; 
 export let lever: Lever = { x: 0.8, y: 0.3, handleY: 0.3, grabbedBy: null, active: false };
+export let levers: Lever[] = [lever];
 export let door: Door = { x: 0.2, y: 0.2, width: 0.15, height: 0.15, open: false };
 
 export let tutorialBox: TutorialBox = { x: 0.3, y: 0.5, grabbedBy: null };
@@ -163,10 +165,13 @@ export function updateAndDrawParticles(ctx: CanvasRenderingContext2D, width: num
 }
 
 let lastDeathTime = 0;
+let pitFallY: number | null = null;
 export function triggerManDeath(message: string = 'ЧЕЛОВЕЧЕК СГОРЕЛ! 🔥 ПЕРЕЗАПУСК...') {
     const now = Date.now();
     if (now - lastDeathTime < 1000) return;
     lastDeathTime = now;
+    gameState.deaths++;
+    pitFallY = null;
 
     playSfx('burn');
     spawnBurnExplosion(man.x, man.y);
@@ -202,11 +207,10 @@ export function resetLevel() {
     gameState.maxEchoes = lvl.maxEchoes || 1;
     man = { x: lvl.man.x, y: Math.min(lvl.man.y, 0.8), grabbedBy: null, color: '#facc15' };
     
-    if (lvl.lever) {
-        lever = { x: lvl.lever.x, y: lvl.lever.y, handleY: lvl.lever.y, grabbedBy: null, active: false };
-    } else {
-        lever = { x: -1, y: -1, handleY: -1, grabbedBy: null, active: false };
-    }
+    levers = (lvl.levers || (lvl.lever ? [lvl.lever] : [])).map(p => ({ ...p, handleY: p.y, grabbedBy: null, active: false }));
+    lever = levers[0] || { x: -1, y: -1, handleY: -1, grabbedBy: null, active: false };
+    lastDeathTime = 0;
+    pitFallY = null;
     
     door = { x: lvl.door.x, y: lvl.door.y, width: lvl.door.width, height: lvl.door.height, open: false };
     
@@ -286,8 +290,15 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
+    const pit = LEVELS[gameState.currentLevel - 1]?.pit;
+    if (pit) {
+        ctx.fillStyle = '#090617';
+        ctx.fillRect(pit.minX * canvasWidth, 0.82 * canvasHeight, (pit.maxX - pit.minX) * canvasWidth, 0.18 * canvasHeight);
+        drawUnmirroredText(ctx, 'ПРОПАСТЬ — ДЕРЖИ МОСТ', (pit.minX + pit.maxX) / 2 * canvasWidth, 0.92 * canvasHeight, 'bold 16px sans-serif', '#f87171');
+    }
+
     // Lever
-    if (lever.x >= 0) {
+    for (const lever of levers) {
         const lvx = lever.x * canvasWidth;
         const lvyTop = lever.y * canvasHeight;
         const lvyBot = (lever.y + 0.2) * canvasHeight;
@@ -311,7 +322,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, 'РЫЧАГ', lvx, lvyTop - 20, '24px sans-serif', 'white');
+        drawUnmirroredText(ctx, levers.length > 1 ? `РЫЧАГ ${levers.indexOf(lever) === 0 ? 'A' : 'B'}` : 'РЫЧАГ', lvx, lvyTop - 20, '24px sans-serif', 'white');
     }
 
     // Door
@@ -586,13 +597,13 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
 
 export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string) {
     const wasHolding = (man.grabbedBy === agentId) || 
-                       (lever.grabbedBy === agentId) || 
+                       (levers.some(l => l.grabbedBy === agentId)) ||
                        (plate?.grabbedBy === agentId) || 
                        (prism?.grabbedBy === agentId);
 
     if (!handLandmarks) {
         if (man.grabbedBy === agentId) man.grabbedBy = null;
-        if (lever.grabbedBy === agentId) lever.grabbedBy = null;
+        for (const lever of levers) if (lever.grabbedBy === agentId) lever.grabbedBy = null;
         if (plate && plate.grabbedBy === agentId) plate.grabbedBy = null;
         if (prism && prism.grabbedBy === agentId) prism.grabbedBy = null;
         if (wasHolding) {
@@ -615,7 +626,7 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
                 playSfx('grab');
             }
         }
-        if (!grabbedAnything && lever.x >= 0 && !lever.grabbedBy) {
+        for (const lever of levers) if (!grabbedAnything && !lever.grabbedBy) {
             if (Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) < 0.15) {
                 lever.grabbedBy = agentId;
                 grabbedAnything = true;
@@ -652,7 +663,7 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
             ctx.stroke();
             drawUnmirroredText(ctx, agentName, px * canvasWidth, py * canvasHeight - 30, '16px sans-serif', agentColor);
         }
-        if (lever.grabbedBy === agentId) {
+        for (const lever of levers) if (lever.grabbedBy === agentId) {
             lever.handleY = Math.max(lever.y, Math.min(lever.y + 0.2, py));
             
             ctx.beginPath();
@@ -689,7 +700,7 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
         }
     } else {
         if (man.grabbedBy === agentId) man.grabbedBy = null;
-        if (lever.grabbedBy === agentId) lever.grabbedBy = null;
+        for (const lever of levers) if (lever.grabbedBy === agentId) lever.grabbedBy = null;
         if (plate && plate.grabbedBy === agentId) plate.grabbedBy = null;
         if (prism && prism.grabbedBy === agentId) prism.grabbedBy = null;
         if (wasHolding) {
@@ -778,7 +789,20 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
 export function evaluateRules() {
     // Gravity logic
     const floor_y = 0.8;
-    if (!man.grabbedBy) {
+    const pit = LEVELS[gameState.currentLevel - 1]?.pit;
+    const overPit = pit && man.x > pit.minX && man.x < pit.maxX;
+    if (overPit && (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING')) {
+        const supported = plate && plate.grabbedBy && Math.abs(plate.x - man.x) < plate.width / 2 && plate.y >= 0.75 && plate.y <= 0.85;
+        if (supported && plate) { pitFallY = null; man.y = plate.y - plate.height / 2 - 0.03; }
+        else {
+            // Gravity applies while dragging too, so lifting cannot bypass the bridge.
+            man.grabbedBy = null;
+            pitFallY = (pitFallY ?? floor_y) + 0.03;
+            man.y = pitFallY;
+            if (man.y > 0.95) triggerManDeath('ЧЕЛОВЕЧЕК УПАЛ В ПРОПАСТЬ! Держи мост над разрывом.');
+        }
+    } else if (!man.grabbedBy) {
+        pitFallY = null;
         if (man.y < floor_y) man.y = Math.min(floor_y, man.y + 0.02);
         else if (man.y > floor_y) man.y = floor_y;
     }
@@ -797,8 +821,11 @@ export function evaluateRules() {
         else if (prism.y > floor_y) prism.y = floor_y;
     }
 
+    // A released bridge falls into the pit instead of becoming permanent ground.
+    if (pit && plate && !plate.grabbedBy && plate.x > pit.minX && plate.x < pit.maxX) plate.y = 1.1;
+
     // Lever logic
-    if (lever.x >= 0) {
+    for (const lever of levers) {
         if (!lever.grabbedBy && lever.handleY > lever.y) {
             lever.handleY = Math.max(lever.y, lever.handleY - 0.02);
         }
@@ -920,7 +947,7 @@ export function evaluateRules() {
     }
 
     // Door unlocking logic: requires lever (if present) AND crystal charged (if present)
-    door.open = (lever.x < 0 || lever.active) && (!crystal || crystal.charged);
+    door.open = levers.every(l => l.active) && (!crystal || crystal.charged);
 
     // Hazard collision & Death mechanics
     let manHitByLaser = false;

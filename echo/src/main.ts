@@ -1,9 +1,10 @@
+import { initializeAccount, showResult, saveProgress, closePanel, panelOpen, handleDwell } from './ui/account';
 import './style.css';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, isPointing, drawUnmirroredText } from './utils';
 import { 
     gameState, man, lever, tutorialBox, tutorialTarget, 
     resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
-    getAgentColor, plate, prism, deathBanner
+    getAgentColor, plate, prism, deathBanner, levers
 } from './game';
 import { LEVELS } from './levels';
 import { playSfx, unlockAudioContext } from './audio';
@@ -44,6 +45,9 @@ if (levelSwitcher) {
 
     levelSwitcher.addEventListener('change', (e) => {
         unlockAudioContext();
+        closePanel();
+        gameState.deaths = 0; gameState.resets = 0; gameState.attemptStart = 0;
+        if (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 4) void saveProgress({ tutorialDone: true });
         const target = e.target as HTMLSelectElement;
         const levelIndex = parseInt(target.value, 10);
         
@@ -118,12 +122,12 @@ function drawAndHandleLevelHUD(ctx: CanvasRenderingContext2D, w: number, h: numb
         ...LEVELS.map((_lvl, index) => ({ label: `УРОВЕНЬ ${index + 1}`, value: index + 1 })),
     ];
     
-    const btnW = 140;
+    const btnW = Math.min(140, (w - 40) / buttons.length - 12);
     const btnH = 50;
-    const gap = 20;
+    const gap = 12;
     const totalW = buttons.length * btnW + (buttons.length - 1) * gap;
     const startX = (w - totalW) / 2;
-    const btnY = 20;
+    const btnY = 170;
     
     const isTutorialStep4 = gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 4;
     const isPointingNow = liveHand ? pointingStabilizer.update(isPointing(liveHand)) : pointingStabilizer.update(false);
@@ -202,6 +206,7 @@ function drawAndHandleLevelHUD(ctx: CanvasRenderingContext2D, w: number, h: numb
 }
 
 function onResults(results: any) {
+    handleDwell(results.multiHandLandmarks?.[0] || null);
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -216,7 +221,10 @@ function onResults(results: any) {
         if (!gameState['wonTimeoutSet']) {
             gameState['wonTimeoutSet'] = true;
             playSfx('win');
-            wonTimeout = setTimeout(() => {
+            const nextLevel = () => {
+                if (wonTimeout) clearTimeout(wonTimeout);
+                closePanel();
+                gameState.deaths = 0; gameState.resets = 0; gameState.attemptStart = 0;
                 wonTimeout = null;
                 gameState.currentLevel = Math.min(gameState.currentLevel + 1, LEVELS.length);
                 gameState.mode = 'IDLE';
@@ -239,10 +247,15 @@ function onResults(results: any) {
                 }
                 
                 gameState['wonTimeoutSet'] = false;
-            }, 5000);
+            };
+            wonTimeout = setTimeout(nextLevel, 8000);
+            const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
+            void showResult({ levelId: gameState.currentLevel, timeLeftMs: Math.max(0, gameState.RECORD_DURATION * (1 - gameState.currentFrame / maxFrames)), echoesUsed: gameState.recordedEchoes.filter(e => e.some(Boolean)).length, deaths: gameState.deaths, resets: gameState.resets }, nextLevel);
         }
         return;
     }
+
+    if (panelOpen()) { drawWorld(canvasCtx, canvasElement.width, canvasElement.height); canvasCtx.restore(); return; }
 
     const liveHand = results.multiHandLandmarks ? results.multiHandLandmarks[0] : null;
     const now = Date.now();
@@ -262,6 +275,7 @@ function onResults(results: any) {
                 gameState.baseInstruction = "ОБУЧЕНИЕ 4/4: Вытяни УКАЗАТЕЛЬНЫЙ ПАЛЕЦ 👆 и наведи на «УРОВЕНЬ 1» сверху, удерживай 1 сек!";
                 modeIndicator.innerText = "ОБУЧЕНИЕ 4/4";
             } else {
+                gameState.resets++;
                 gameState.mode = 'IDLE';
                 resetLevel();
                 modeIndicator.innerText = "ОЖИДАНИЕ...";
@@ -310,6 +324,7 @@ function onResults(results: any) {
         }
     } else if (gameState.mode === 'IDLE') {
         if (liveHand && isOpenPalm(liveHand)) {
+            if (!gameState.attemptStart) gameState.attemptStart = now;
             gameState.mode = 'RECORDING';
             gameState.recordStartTime = now;
             gameState.echoIndex = 0;
@@ -409,6 +424,7 @@ function onResults(results: any) {
             gameState.recordedEchoes = [];
             gameState.echoIndex = 0;
             resetLevel();
+            gameState.resets++;
             modeIndicator.innerText = "ПРОВАЛ...";
             modeIndicator.className = "status-box text-2xl font-bold text-red-500";
             gameState.baseInstruction = "Время вышло! Дверь захлопнулась. Подними ладонь для рестарта.";
@@ -486,6 +502,23 @@ function onResults(results: any) {
         }
     }
 
+    const levelConfig = LEVELS[gameState.currentLevel - 1];
+    if (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING') {
+        if (levelConfig.pit && plate) {
+            const center = (levelConfig.pit.minX + levelConfig.pit.maxX) / 2;
+            if (plate.y < 0.75) currentHint = `Мост слишком высоко: опусти на ${Math.round((0.8 - plate.y) * canvasElement.height)} px.`;
+            else if (Math.abs(plate.x - center) > 0.03) currentHint = `Сдвинь мост к центру пропасти на ${Math.round(Math.abs(plate.x - center) * canvasElement.width)} px.`;
+            else if (!plate.grabbedBy) currentHint = 'Мост нужно держать — запиши клона со щипком.';
+        }
+        if (levelConfig.levers) {
+            const inactive = levers.findIndex(l => !l.active);
+            if (inactive >= 0 && (gameState.mode === 'PLAYING' || gameState.echoIndex > 0)) {
+                const l = levers[inactive];
+                currentHint = `Рычаг ${inactive === 0 ? 'A' : 'B'} не дожат: потяни вниз ещё на ${Math.max(0, Math.round((l.y + 0.18 - l.handleY) * canvasElement.height))} px. Клон ${inactive + 1} должен держать его всю петлю.`;
+            }
+        }
+    }
+
     if (deathBanner.text && Date.now() < deathBanner.until) {
         instruction.innerHTML = `<b class='text-red-500'>${deathBanner.text}</b>`;
     } else {
@@ -523,4 +556,12 @@ const camera = new Camera(videoElement, {
     },
     width: 1280, height: 720
 });
-camera.start();
+void (async () => {
+    const saved = await initializeAccount();
+    if (saved?.progress.tutorial_done) {
+        levelSwitcher.value = String(Math.min(saved.progress.max_level, LEVELS.length));
+        levelSwitcher.dispatchEvent(new Event('change'));
+    }
+    try { await camera.start(); }
+    catch { instruction.textContent = 'Камера недоступна. Разреши доступ к камере и перезагрузи страницу (нужен HTTPS или localhost).'; }
+})();

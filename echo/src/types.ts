@@ -75,6 +75,9 @@ export interface ReflectedLaser {
 export interface GameState {
     mode: 'TUTORIAL' | 'IDLE' | 'RECORDING' | 'PLAYING' | 'WON';
     tutorialStep: number;
+    deaths: number;
+    resets: number;
+    attemptStart: number;
     frames: any[];
     recordedEchoes: any[][];
     echoIndex: number;
@@ -107,6 +110,8 @@ export interface LevelConfig {
     plate?: { x: number, y: number, width: number, height: number };
     crystal?: { x: number, y: number, width: number, height: number };
     prism?: { x: number, y: number, width: number, height: number, direction: 'left' | 'right' };
+    pit?: { minX: number; maxX: number };
+    levers?: { x: number; y: number }[];
     maxEchoes?: number;
     hintIdle?: string;
     hintRecording?: string | string[];

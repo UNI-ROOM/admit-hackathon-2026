@@ -1,13 +1,14 @@
 services:
   echo-game:
     build:
-      context: ./echo
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: echo/Dockerfile
       target: dev
     container_name: echo-game
     volumes:
-      - ./echo:/app
-      - /app/node_modules
+      - ./echo:/app/echo
+      - ./shared:/app/shared:ro
+      - /app/echo/node_modules
     ports:
       - "127.0.0.1:${PORT:-5173}:5173"
     environment:

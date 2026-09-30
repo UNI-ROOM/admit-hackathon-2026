@@ -93,10 +93,10 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         assert.equal(stabilizer.currentStableValue, 'IDLE');
     });
 
-    test('9. Levels: validates all 3 levels have distinct titles and compliant parameters', () => {
-        assert.equal(LEVELS.length, 3);
+    test('9. Levels: validates all campaign levels have distinct titles and compliant parameters', () => {
+        assert.equal(LEVELS.length, 5);
         const titles = new Set(LEVELS.map(l => l.title));
-        assert.equal(titles.size, 3);
+        assert.equal(titles.size, LEVELS.length);
 
         LEVELS.forEach(lvl => {
             assert.ok(lvl.man.x >= 0 && lvl.man.x <= 1);
