@@ -35,7 +35,7 @@ npm run dev
 
 ---
 
-### 🧪 Запуск Unit-тестов движка (87 тестов, из них 16 — движковых)
+### 🧪 Запуск Unit-тестов движка (90 тестов, из них 16 — движковых)
 Встроенный TypeScript test runner без сторонних тяжелых фреймворков:
 ```bash
 cd echo
@@ -59,6 +59,8 @@ For full recording sequences, Easy uses 1/1/2 loops; Hard uses 1/1/1 with two ha
 Physics and echo recording run at **60 Hz**, independently of camera inference (up to 30 FPS during play, 15 FPS in menus). Pinch detection scales with the palm and uses a wider release threshold; short tracking gaps retain the grip for up to **180 ms**. Deliberately opening the fingers releases immediately. Position smoothing preserves hand geometry, so it cannot change a pinch into another gesture. Switching away from the tab freezes the round timer and discards stale input on return.
 
 Tracking scripts load after the menu renders, with matching pinned JS/WASM versions. The camera requests 640×480 rather than 1280×720; inference never overlaps itself, and the 2D drawing surface is capped at 1920×1080. A failed tracking download leaves the menu and level selection usable.
+
+On levels 2–3 the laser sweeps from 6% to 94% of the map width. Fixed green shelters protect the entrance and lever positions: the beam stops at their upper edge, so its visible length matches collision. The shield and recorded hands still follow the same synchronized laser path.
 
 The game is built on the concept of **"cooperating with your past self"**: you record a stretch of time while performing one action (e.g. holding a shield against a deadly laser), and on the next loop your clone replays that movement with millisecond precision while you carry out the second part of the task.
 

@@ -63,6 +63,9 @@ export let tutorialBox: TutorialBox = { x: 0.3, y: 0.5, grabbedBy: null };
 export let tutorialTarget: TutorialTarget = { x: 0.7, y: 0.5, radius: 0.1 };
 
 export let laser: Laser | null = null;
+// Shelters stay at the level's entrance and levers, never follow the player.
+// Rendering and collision share the same shortened beam height.
+export let laserSafeZones: { x: number; y: number; width: number; height: number }[] = [];
 export let plate: Plate | null = null;
 export let crystal: Crystal | null = null;
 export let prism: Prism | null = null;
@@ -336,6 +339,10 @@ export function resetLevel({ preserveProgress = false }: { preserveProgress?: bo
     } else {
         laser = null;
     }
+    laserSafeZones = laser?.minX !== undefined ? [
+        { x: lvl.man.x - 0.09, y: lvl.man.y - 0.16, width: 0.18, height: 0.24 },
+        ...levers.map(lever => ({ x: lever.x - 0.06, y: lever.y - 0.14, width: 0.12, height: 0.42 }))
+    ] : [];
     
     if (lvl.plate) {
         plate = { ...lvl.plate, grabbedBy: null };
@@ -408,6 +415,17 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
+    // Make the safe entrance and lever positions visible without extra text.
+    ctx.save();
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.06)';
+    ctx.strokeStyle = 'rgba(52, 211, 153, 0.45)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    for (const zone of laserSafeZones) {
+        ctx.fillRect(zone.x * canvasWidth, zone.y * canvasHeight, zone.width * canvasWidth, zone.height * canvasHeight);
+        ctx.strokeRect(zone.x * canvasWidth, zone.y * canvasHeight, zone.width * canvasWidth, zone.height * canvasHeight);
+    }
+    ctx.restore();
     // Lever
     for (const [index, lever] of levers.entries()) {
         const lvx = lever.x * canvasWidth;
@@ -984,14 +1002,24 @@ export function evaluateRules() {
         }
 
         laser.height = 1.0 - laser.y; // Default goes to bottom
+
+        // Clip before fixed shelters, accounting for the full beam width.
+        for (const zone of laserSafeZones) {
+            if (laser.x + laser.width / 2 >= zone.x && laser.x - laser.width / 2 <= zone.x + zone.width) {
+                laser.height = Math.min(laser.height, Math.max(0, zone.y - laser.y));
+            }
+        }
         
         // Deflection by Shield (Plate)
         if (plate) {
             if (plate.x - plate.width/2 < laser.x + laser.width/2 && 
                 plate.x + plate.width/2 > laser.x - laser.width/2) {
                 if (plate.y > laser.y) {
-                    laser.height = Math.max(0, (plate.y - plate.height/2) - laser.y);
-                    spawnSparks(laser.x, plate.y - plate.height/2, 2, '#38bdf8');
+                    const shieldHeight = Math.max(0, (plate.y - plate.height/2) - laser.y);
+                    if (shieldHeight < laser.height) {
+                        laser.height = shieldHeight;
+                        spawnSparks(laser.x, plate.y - plate.height/2, 2, '#38bdf8');
+                    }
                 }
             }
         }
