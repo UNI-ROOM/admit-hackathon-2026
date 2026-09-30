@@ -1,4 +1,4 @@
-import { GameState, Man, Lever, Door, TutorialBox, TutorialTarget, Laser, Plate, Crystal, Prism, ReflectedLaser } from './types';
+import { Entity, GameState, Man, Lever, Door, TutorialBox, TutorialTarget, Laser, Plate, Crystal, Prism, ReflectedLaser } from './types';
 import { drawUnmirroredText, isPinching } from './utils';
 import { LEVELS } from './levels';
 import { playSfx } from './audio';
@@ -57,6 +57,42 @@ export let crystal: Crystal | null = null;
 export let prism: Prism | null = null;
 export let reflectedLaser: ReflectedLaser = { active: false, startX: 0, startY: 0, endX: 0, endY: 0 };
 export let deathBanner: { text: string; until: number } = { text: '', until: 0 };
+
+type ReplayObject = 'man' | 'plate' | 'prism' | `lever_${number}`;
+
+// Attach actual grabs to the recording itself. Replacing/clearing recordings
+// also clears their reservations, while rewinding the same loop preserves them.
+const recordedObjects = new WeakMap<GameState['recordedEchoes'][number], Set<ReplayObject>>();
+
+function reservedBy(objectId: ReplayObject): string | null {
+    const count = gameState.mode === 'PLAYING' ? gameState.recordedEchoes.length
+        : gameState.mode === 'RECORDING' ? gameState.echoIndex : 0;
+    for (let i = 0; i < count; i++) {
+        if (recordedObjects.get(gameState.recordedEchoes[i])?.has(objectId)) return `ghost_${i}`;
+    }
+    return null;
+}
+
+function canGrab(object: Entity, objectId: ReplayObject, agentId: string): boolean {
+    if (object.grabbedBy) return false;
+    const owner = reservedBy(objectId);
+    if (owner && owner !== agentId) return false;
+
+    // A replay may only pick up objects actually grabbed during its recording.
+    // This also prevents a nearby clone from taking the live player's object.
+    const ghostIndex = /^ghost_(\d+)$/.exec(agentId);
+    const objects = ghostIndex ? recordedObjects.get(gameState.recordedEchoes[Number(ghostIndex[1])]) : undefined;
+    return !objects || objects.has(objectId);
+}
+
+function grab(object: Entity, objectId: ReplayObject, agentId: string): void {
+    object.grabbedBy = agentId;
+    if (agentId === 'live' && gameState.mode === 'RECORDING') {
+        const recording = gameState.recordedEchoes[gameState.echoIndex];
+        if (recording) recordedObjects.get(recording)?.add(objectId);
+    }
+    playSfx('grab');
+}
 
 // --- Particle System ---
 export interface Particle {
@@ -560,6 +596,19 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     // Man
     drawMan(ctx, canvasWidth, canvasHeight, man);
 
+    // Show why an otherwise free object cannot be picked up in this loop.
+    const replayObjects: [ReplayObject, Entity | null][] = [
+        ['man', man], ['plate', plate], ['prism', prism],
+        ...levers.map((object, index): [ReplayObject, Entity] => [`lever_${index}`, object]),
+    ];
+    for (const [objectId, object] of replayObjects) {
+        const owner = reservedBy(objectId);
+        if (object && owner && !object.grabbedBy) {
+            drawUnmirroredText(ctx, `🔒 ${getAgentName(owner)}`, object.x * canvasWidth,
+                object.y * canvasHeight - 45, 'bold 16px sans-serif', getAgentColor(owner));
+        }
+    }
+
     // Death banner
     if (deathBanner.text && Date.now() < deathBanner.until) {
         ctx.save();
@@ -586,6 +635,10 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
 }
 
 export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string) {
+    if (agentId === 'live' && gameState.mode === 'RECORDING') {
+        const recording = gameState.recordedEchoes[gameState.echoIndex];
+        if (recording && !recordedObjects.has(recording)) recordedObjects.set(recording, new Set());
+    }
     const wasHolding = (man.grabbedBy === agentId) || 
                        (levers.some(l => l.grabbedBy === agentId)) ||
                        (plate?.grabbedBy === agentId) || 
@@ -609,32 +662,28 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
     if (pinch) {
         let grabbedAnything = wasHolding;
 
-        if (!grabbedAnything && !man.grabbedBy) {
+        if (!grabbedAnything && canGrab(man, 'man', agentId)) {
             if (Math.sqrt(Math.pow(px - man.x, 2) + Math.pow(py - man.y, 2)) < 0.15) {
-                man.grabbedBy = agentId;
+                grab(man, 'man', agentId);
                 grabbedAnything = true;
-                playSfx('grab');
             }
         }
-        for (const lever of levers) if (!grabbedAnything && !lever.grabbedBy) {
+        for (const [index, lever] of levers.entries()) if (!grabbedAnything && canGrab(lever, `lever_${index}`, agentId)) {
             if (Math.sqrt(Math.pow(px - lever.x, 2) + Math.pow(py - lever.handleY, 2)) < 0.15) {
-                lever.grabbedBy = agentId;
+                grab(lever, `lever_${index}`, agentId);
                 grabbedAnything = true;
-                playSfx('grab');
             }
         }
-        if (!grabbedAnything && plate && !plate.grabbedBy) {
+        if (!grabbedAnything && plate && canGrab(plate, 'plate', agentId)) {
             if (Math.abs(px - plate.x) < plate.width/2 + 0.1 && Math.abs(py - plate.y) < plate.height/2 + 0.1) {
-                plate.grabbedBy = agentId;
+                grab(plate, 'plate', agentId);
                 grabbedAnything = true;
-                playSfx('grab');
             }
         }
-        if (!grabbedAnything && prism && !prism.grabbedBy) {
+        if (!grabbedAnything && prism && canGrab(prism, 'prism', agentId)) {
             if (Math.abs(px - prism.x) < prism.width/2 + 0.1 && Math.abs(py - prism.y) < prism.height/2 + 0.1) {
-                prism.grabbedBy = agentId;
+                grab(prism, 'prism', agentId);
                 grabbedAnything = true;
-                playSfx('grab');
             }
         }
 
