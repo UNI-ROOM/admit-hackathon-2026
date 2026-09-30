@@ -104,6 +104,27 @@ test('direct play has a full timed round without clones and a correct score time
     assert.equal(gameState.directPlay, false, 'restarting restores one-hand recording mode');
 });
 
+test('switching to two hands rewinds displaced clone objects while preserving live objects', () => {
+    idle(3);
+    gameState.mode = 'RECORDING';
+    gameState.recordedEchoes = [[null]];
+    const pickup = hand(plate!.x, plate!.y);
+    drag(pickup, 'live');
+    drag(null, 'live');
+    gameState.echoIndex = 1;
+    gameState.recordedEchoes.push([]);
+    resetLevel();
+    plate!.x = 0.2;
+    plate!.y = 0.6;
+    plate!.grabbedBy = 'ghost_0';
+    drag(hand(lever.x, lever.handleY), 'live');
+    startTwoHandPlay(1000);
+    assert.equal(lever.grabbedBy, 'live');
+    assert.equal(plate!.grabbedBy, null);
+    drag(pickup, 'ghost_0');
+    assert.equal(plate!.grabbedBy, 'ghost_0', 'clone can reach its original pickup again');
+});
+
 test('moving laser keeps moving in direct play without any recorded frames', () => {
     idle(2);
     startTwoHandPlay(Date.now() - 1000);

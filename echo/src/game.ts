@@ -111,7 +111,26 @@ export function startTwoHandPlay(now: number): void {
     gameState.playStartTime = now;
     gameState.currentFrame = 0;
     gameState.baseInstruction = t('playing.twoHandsHint');
-    if (wasIdle) resetLevel();
+    if (wasIdle) {
+        resetLevel();
+    } else {
+        // Replaying completed clones from frame zero also requires their
+        // objects to start at the recorded positions. Keep live objects intact.
+        const level = LEVELS[gameState.currentLevel - 1];
+        if (reservedBy('man')) Object.assign(man, level.man, { grabbedBy: null });
+        if (plate && level.plate && reservedBy('plate')) Object.assign(plate, level.plate, { grabbedBy: null });
+        if (prism && level.prism && reservedBy('prism')) {
+            Object.assign(prism, level.prism, { grabbedBy: null });
+            if (crystal) { crystal.charge = 0; crystal.charged = false; }
+        }
+        levers.forEach((object, index) => {
+            if (reservedBy(`lever_${index}`)) {
+                object.handleY = object.y;
+                object.active = false;
+                object.grabbedBy = null;
+            }
+        });
+    }
 }
 
 export function playingTimeLeft(now: number): number {
