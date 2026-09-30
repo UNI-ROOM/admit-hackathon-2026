@@ -1,0 +1,10 @@
+import { serve } from '@hono/node-server';
+import { existsSync } from 'node:fs';
+import { createApp } from './app';
+import { openDatabase } from './db';
+import { sendCode } from './mail';
+if (existsSync('.env')) process.loadEnvFile('.env');
+const db = openDatabase(process.env.DB_PATH || './data/echo.db');
+const app = createApp({ db, sendCode, production: process.env.NODE_ENV === 'production', origin: process.env.PUBLIC_ORIGIN });
+const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: Number(process.env.PORT || 3000) });
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => server.close(() => { db.close(); process.exit(0); }));

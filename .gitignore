@@ -5,3 +5,10 @@ build/
 .DS_Store
 *.log
 .vite/
+.env
+.env.*
+!.env.example
+server/data/
+*.db
+*.db-shm
+*.db-wal
