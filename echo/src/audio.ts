@@ -52,13 +52,24 @@ export function setSfxEnabled(on: boolean): void {
 let musicEnabled = true;
 let musicPlaying = false;
 let musicAudio: HTMLAudioElement | null = null;
+let musicVolume = 0.1;
+
+export function setMusicVolume(volume: number): void {
+    if (typeof volume !== 'number' || isNaN(volume)) {
+        volume = 0.1;
+    }
+    musicVolume = Math.max(0.0, Math.min(1.0, volume));
+    if (musicAudio) {
+        musicAudio.volume = musicVolume;
+    }
+}
 
 function getMusicAudio(): HTMLAudioElement | null {
     if (typeof window === 'undefined') return null;
     if (!musicAudio) {
         musicAudio = new Audio('/bg-music.mp3');
         musicAudio.loop = true;
-        musicAudio.volume = 0.2;
+        musicAudio.volume = musicVolume;
     }
     return musicAudio;
 }
