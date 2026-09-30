@@ -10,6 +10,7 @@ import { api } from '../api';
 import { gameState, resetLevel } from '../game';
 import { t } from '../i18n';
 import { show, onChange } from './router';
+import { touchDevice } from '../device';
 
 const container = document.getElementById('scene-levels');
 
@@ -34,7 +35,8 @@ function setHtml(id: string, html: string): void {
 
 export function applyIdleHud(levelIndex: number): void {
     const config = getLevelConfig(levelIndex, gameState.difficulty);
-    setText('level-title', `${config?.title || ''} · ${t(`difficulty.${gameState.difficulty}`)}`);
+    setText('level-title', touchDevice ? `${String(levelIndex).padStart(2, '0')} · ${levelName(levelIndex)}`
+        : `${config?.title || ''} · ${t(`difficulty.${gameState.difficulty}`)}`);
     const actions = document.getElementById('round-actions');
     if (actions) actions.hidden = false;
     const modeIndicator = document.getElementById('mode-indicator');
@@ -123,7 +125,7 @@ function render(): void {
 
     const heading = document.createElement('h2');
     heading.className = 'levels-heading';
-    heading.textContent = t('levels.title');
+    heading.textContent = `2D · ${t('levels.title')}`;
 
     const grid = document.createElement('div');
     grid.className = 'levels-grid';
@@ -152,7 +154,7 @@ function render(): void {
         for (const difficulty of ['easy', 'hard'] as const) {
             const option = document.createElement('div');
             option.className = 'difficulty-option';
-            const play = button(t(`levels.${difficulty}`), () => goToLevel(n, difficulty));
+            const play = button(t(`${touchDevice ? 'mobile' : 'levels'}.${difficulty}`), () => goToLevel(n, difficulty));
             option.append(play);
             card.append(option);
         }
@@ -163,14 +165,14 @@ function render(): void {
     const nav = document.createElement('div');
     nav.className = 'levels-nav';
     nav.append(
-        button(t('levels.back'), () => show('menu')),
+        button(t('levels.back'), () => show(touchDevice ? 'menu' : 'modes')),
         button(t('levels.tutorial'), () => goToTutorial())
     );
 
     const help = document.createElement('div');
     help.className = 'levels-help';
     const difficulty = document.createElement('p');
-    difficulty.textContent = t('levels.difficultySummary');
+    difficulty.textContent = t(touchDevice ? 'mobile.difficultySummary' : 'levels.difficultySummary');
     const hint = document.createElement('p');
     hint.textContent = t('levels.difficultyHint');
     help.append(difficulty, hint);

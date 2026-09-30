@@ -17,6 +17,7 @@ import { t } from './i18n';
 import { LiveHandTracker, HandInputBuffer, snapshotHands, recordedHands, playableHands, type HandResults } from './hands';
 import { getSettings, subscribe as subscribeSettings } from './settings';
 import { show, current, onEnterGame, onChange } from './scenes/router';
+import { get3DDifficulty } from './scenes/modes';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
 import { setHandStatus, setStatusMessage, setCameraStarted } from './scenes/menu';
 import { isPaused } from './scenes/pause';
@@ -134,15 +135,28 @@ function onResults(results: HandResults) {
 
 function processFrame(render: boolean) {
     const now = Date.now();
-    const visible = playableHands(handInput.visible(now), gameState.difficulty);
+    const difficulty = current() === 'game3d' ? get3DDifficulty() : gameState.difficulty;
+    const visible = playableHands(handInput.visible(now), difficulty);
     const trackedHands = handInput.read(now);
-    const liveHands = playableHands(trackedHands, gameState.difficulty);
+    const liveHands = playableHands(trackedHands, difficulty);
     latestHandCount = visible.filter(Boolean).length;
     const liveHand = liveHands[0] || liveHands[1];
     const liveAgent = liveHands[0] ? 'live' : 'live_1';
     const twoHands = visible.every(Boolean);
     // Menus use actual visible hands; occlusion grace only protects gameplay.
-    if (render) handlePointer(visible);
+    // In 3D a gripping hand must not dwell-click the HUD while carrying an object.
+    const pointerHands = current() === 'game3d' ? visible.map(hand => {
+        if (!hand) return null;
+        const palm = Math.hypot(hand[0].x - hand[9].x, hand[0].y - hand[9].y);
+        const pinch = Math.hypot(hand[8].x - hand[4].x, hand[8].y - hand[4].y);
+        return pinch / Math.max(.06, palm) < .62 ? null : hand;
+    }) : visible;
+    if (render) handlePointer(pointerHands);
+
+    if (current() === 'game3d') {
+        window.dispatchEvent(new CustomEvent('echo:hands', { detail: liveHands }));
+        return;
+    }
 
     // While the menu/level-select scenes are showing, the camera may still be
     // running in the background (we don't stop it on scene switch), but the
@@ -468,7 +482,7 @@ let hands: any = null;
 let trackingReady: Promise<void> | null = null;
 let camera: any = null;
 let cameraStarted = false;
-let cameraStarting: Promise<void> | null = null;
+let cameraStarting: Promise<boolean> | null = null;
 let detectionPending = false;
 let lastDetectionAt = -Infinity;
 let detectionFailed = false;
@@ -489,22 +503,22 @@ async function initializeTracking(): Promise<void> {
 
 // Camera requests and model inference cannot overlap. Lower menu frequency and
 // a 640x480 stream leave CPU/GPU time for rendering and two-hand tracking.
-async function ensureCamera(): Promise<void> {
-    if (cameraStarted) return;
+async function ensureCamera(): Promise<boolean> {
+    if (cameraStarted) return true;
     if (cameraStarting) return cameraStarting;
     cameraStarting = (async () => {
         try {
             await initializeTracking();
         } catch {
             setStatusMessage(t('camera.unavailable'));
-            return;
+            return false;
         }
         hands.setOptions({ maxNumHands: current() === 'game' && (gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL') ? 1 : 2 });
         if (!camera) {
             camera = new Camera(videoElement, {
                 onFrame: async () => {
                     const now = performance.now();
-                    const interval = current() === 'game' && !isPaused() ? 1000 / 30 : 1000 / 15;
+                    const interval = (current() === 'game' && !isPaused()) || current() === 'game3d' ? 1000 / 30 : 1000 / 15;
                     if (document.hidden || detectionPending || now - lastDetectionAt < interval) return;
                     lastDetectionAt = now;
                     detectionPending = true;
@@ -525,10 +539,12 @@ async function ensureCamera(): Promise<void> {
             await camera.start();
             cameraStarted = true;
             setCameraStarted();
+            return true;
         } catch {
             writeText(instruction, t('camera.unavailable'));
             setStatusMessage(t('status.cameraBlocked'));
             if (current() === 'game') show('menu');
+            return false;
         }
     })().finally(() => { cameraStarting = null; });
     return cameraStarting;
@@ -553,9 +569,49 @@ document.addEventListener('visibilitychange', () => {
     hiddenAt = 0;
 });
 
+
+let threeSession: { dispose(): void } | null = null;
+let threeLoadGeneration = 0;
+onChange(scene => {
+    const generation = ++threeLoadGeneration;
+    threeSession?.dispose();
+    threeSession = null;
+    if (scene !== 'game3d') return;
+    hands?.setOptions({ maxNumHands: get3DDifficulty() === 'easy' ? 1 : 2 });
+    const host = document.getElementById('scene-game3d');
+    if (!host) return;
+    const loading = document.createElement('p');
+    loading.className = 'three-loading';
+    loading.textContent = t('modes.loading3d');
+    host.replaceChildren(loading);
+    void import('./three/index').then(async ({ mountLevel3D }) => {
+        if (generation !== threeLoadGeneration || current() !== 'game3d') return;
+        const mounted = await mountLevel3D(host, get3DDifficulty(), {
+            onExit: () => show('modes'),
+            onCameraRequest: async () => {
+                if (!await ensureCamera()) throw new Error('Camera unavailable');
+            }
+        });
+        if (generation !== threeLoadGeneration || current() !== 'game3d') mounted.dispose();
+        else threeSession = mounted;
+    }).catch(error => {
+        if (generation !== threeLoadGeneration || current() !== 'game3d') return;
+        console.error('Unable to start 3D level', error);
+        const message = document.createElement('p');
+        message.textContent = t('modes.error3d');
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.dataset.dwell = '';
+        back.className = 'menu-btn';
+        back.textContent = t('levels.back');
+        back.onclick = () => show('modes');
+        host.replaceChildren(message, back);
+    });
+});
 // Pinch grabs objects while recording/replaying clones and in the tutorial drag
 // step; everywhere else the hand cursor behaves as in the menus.
 setUiContext(() => {
+    if (current() === 'game3d') return false;
     const grabbing = gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING'
         || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 2);
     return current() !== 'game' || !grabbing || !!document.querySelector('dialog[open]');

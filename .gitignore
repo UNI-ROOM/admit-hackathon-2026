@@ -5,6 +5,7 @@ build/
 .DS_Store
 *.log
 .vite/
+echo/test-artifacts/
 .env
 .env.*
 !.env.example
