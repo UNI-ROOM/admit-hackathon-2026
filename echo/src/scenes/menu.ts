@@ -25,21 +25,33 @@ export function setStatusMessage(message: string): void {
     void updateStatusLine();
 }
 
-function button(text: string, action: () => void): HTMLButtonElement {
+function button(text: string, action: () => void, extraClass = ''): HTMLButtonElement {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.dwell = '';
-    b.className = 'menu-btn';
+    b.className = extraClass ? `menu-btn ${extraClass}` : 'menu-btn';
     b.textContent = text;
     b.onclick = action;
     return b;
 }
 
+// Builds a "<dot> label" segment for the status line, dot colour reflecting
+// state (ok / muted / danger) without altering the underlying t() text.
+function statusSegment(dotState: 'ok' | 'muted' | 'danger', text: string): HTMLSpanElement {
+    const seg = document.createElement('span');
+    seg.className = 'status-segment';
+    const dot = document.createElement('span');
+    dot.className = `status-dot status-dot--${dotState}`;
+    seg.append(dot, document.createTextNode(text));
+    return seg;
+}
+
 async function updateStatusLine(): Promise<void> {
     const status = document.getElementById('menu-status-line');
     if (!status) return;
+    status.replaceChildren();
     if (statusOverride) {
-        status.textContent = statusOverride;
+        status.append(statusSegment('danger', statusOverride));
         return;
     }
     const camState = await cameraPermissionState();
@@ -47,9 +59,15 @@ async function updateStatusLine(): Promise<void> {
         : camState === 'denied' ? 'status.cameraBlocked'
         : camState === 'prompt' ? 'status.cameraPrompt'
         : 'status.cameraUnknown';
+    const camDot = camState === 'granted' ? 'ok' : camState === 'denied' ? 'danger' : 'muted';
+    const handDot = handStatus === 'ready' ? 'ok' : 'muted';
     const handKey = handStatus === 'ready' ? 'status.handReady' : 'status.handLoading';
     const build = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_GIT_SHA ?? 'dev';
-    status.textContent = `${t(camKey)} · ${t(handKey)} · v${build}`;
+    status.append(
+        statusSegment(camDot, t(camKey)),
+        statusSegment(handDot, t(handKey)),
+        statusSegment('muted', `v${build}`)
+    );
 }
 
 function render(): void {
@@ -81,7 +99,7 @@ function render(): void {
     const buttons = document.createElement('div');
     buttons.className = 'menu-buttons';
     buttons.append(
-        button(t('menu.start'), () => show('levels')),
+        button(t('menu.start'), () => show('levels'), 'menu-btn--primary'),
         button(t('menu.profile'), () => openProfile()),
         button(t('menu.leaderboard'), () => openLeaderboard()),
         button(t('menu.settings'), () => openSettings())
