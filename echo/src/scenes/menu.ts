@@ -1,5 +1,5 @@
 // Main menu scene: title, START / PROFILE / LEADERBOARD / SETTINGS, and a
-// bottom status line (camera permission, hand-tracking model status, build id).
+// bottom status line (camera permission, hand-tracking status).
 
 import { t } from '../i18n';
 import { show } from './router';
@@ -9,12 +9,20 @@ import { openSettings } from './settings';
 
 const container = document.getElementById('scene-menu');
 
-let handStatus: 'loading' | 'ready' = 'loading';
+let handStatus: 'waiting' | 'loading' | 'ready' = 'waiting';
 let statusOverride: string | null = null;
 
 // Called by main.ts once the hand-tracking model returns its first result.
 export function setHandStatus(status: 'loading' | 'ready'): void {
     handStatus = status;
+    void updateStatusLine();
+}
+
+// Called by main.ts once the camera stream is running; the hand model is
+// then loading until its first result arrives.
+export function setCameraStarted(): void {
+    statusOverride = null;
+    if (handStatus === 'waiting') handStatus = 'loading';
     void updateStatusLine();
 }
 
@@ -61,12 +69,12 @@ async function updateStatusLine(): Promise<void> {
         : 'status.cameraUnknown';
     const camDot = camState === 'granted' ? 'ok' : camState === 'denied' ? 'danger' : 'muted';
     const handDot = handStatus === 'ready' ? 'ok' : 'muted';
-    const handKey = handStatus === 'ready' ? 'status.handReady' : 'status.handLoading';
-    const build = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_GIT_SHA ?? 'dev';
+    const handKey = handStatus === 'ready' ? 'status.handReady'
+        : handStatus === 'loading' ? 'status.handLoading'
+        : 'status.handWaiting';
     status.append(
         statusSegment(camDot, t(camKey)),
-        statusSegment(handDot, t(handKey)),
-        statusSegment('muted', `v${build}`)
+        statusSegment(handDot, t(handKey))
     );
 }
 
@@ -105,11 +113,15 @@ function render(): void {
         button(t('menu.settings'), () => openSettings())
     );
 
+    const hint = document.createElement('p');
+    hint.className = 'menu-hand-hint';
+    hint.textContent = t('menu.handHint');
+
     const status = document.createElement('div');
     status.className = 'menu-status';
     status.id = 'menu-status-line';
 
-    container.append(badge, titleWrap, buttons, status);
+    container.append(badge, titleWrap, buttons, hint, status);
     void updateStatusLine();
 }
 

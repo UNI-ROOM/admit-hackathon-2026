@@ -1,4 +1,5 @@
-import { initializeAccount, showResult, closePanel, panelOpen, handleDwell } from './ui/account';
+import { initializeAccount, showResult, closePanel, panelOpen } from './ui/account';
+import { handlePointer, setUiContext } from './ui/pointer';
 import './style.css';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
 import {
@@ -14,7 +15,7 @@ import { LiveHandTracker, snapshotHands, recordedHands, type HandResults } from 
 import { getSettings, subscribe as subscribeSettings } from './settings';
 import { show, current, onEnterGame } from './scenes/router';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
-import { setHandStatus, setStatusMessage } from './scenes/menu';
+import { setHandStatus, setStatusMessage, setCameraStarted } from './scenes/menu';
 import { isPaused } from './scenes/pause';
 import './scenes/menu';
 import './scenes/levels';
@@ -75,9 +76,8 @@ function onResults(results: HandResults) {
     const liveAgent = liveHands[0] ? 'live' : 'live_1';
     const twoHands = liveHands.every(Boolean);
 
-    // The pointing-finger dwell cursor works everywhere (menu, level select,
-    // in-game HUD buttons), regardless of which scene is active.
-    handleDwell(liveHand);
+    // The hand cursor drives the whole interface (menus, dialogs, HUD).
+    handlePointer(liveHands);
 
     if (!handModelReady) {
         handModelReady = true;
@@ -408,8 +408,8 @@ const hands = new Hands({locateFile: (file: string) => `https://cdn.jsdelivr.net
 hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 hands.onResults(onResults);
 
-// The camera is only constructed/started lazily, the first time the player
-// enters the game scene (via PLAY/TUTORIAL) — never on page load.
+// The camera starts with the menu so the interface can be driven by hand;
+// entering the game retries if access was refused earlier.
 let camera: any = null;
 let cameraStarted = false;
 
@@ -430,12 +430,16 @@ async function ensureCamera() {
         cameraStarted = false;
         instruction.textContent = t('camera.unavailable');
         setStatusMessage(t('status.cameraBlocked'));
-        show('menu');
+        if (current() === 'game') show('menu');
+        return;
     }
+    setCameraStarted();
 }
 onEnterGame(() => { void ensureCamera(); });
+setUiContext(() => current() !== 'game' || !!document.querySelector('dialog[open]'));
 
 show('menu');
+void ensureCamera();
 void (async () => {
     await initializeAccount();
     unlockAudioContext();

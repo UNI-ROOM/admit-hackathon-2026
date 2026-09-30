@@ -71,7 +71,7 @@ flowchart LR
    - Step 1: Palm calibration — show an open hand 🖐️.
    - Step 2: Pinch calibration — grab the cube and move it into the teleport zone 🤏.
    - Step 3: Fist-reset calibration ✊ (hold for 5 seconds for an instant restart).
-   - Step 4: **New 4th gesture — index finger pointing 👆** — aim at the level menu buttons above to switch levels (confirm with a 1-second hold or a pinch).
+   - Step 4: **New 4th gesture — index finger pointing 👆** — aim at the ☰ MENU button and hold for 1 second.
 2. **Level 1: Prism & Crystal (Optics & Refraction)**:
    - A vertical laser is reflected by a prism at a 90° angle.
    - The player aims the beam at a photon crystal until it's fully charged (100%), while the clone helps hold the components in place.
@@ -128,9 +128,9 @@ flowchart LR
 | **Open palm** | 🖐️ | Start a level / begin recording the loop | All 4 fingers extended above their PIP joints, wrist in frame |
 | **Pinch** | 🤏 | Grab and move objects (the little guy, shield, prism); quick confirm for level selection | Euclidean distance between thumb tip and index fingertip `< 0.08` |
 | **Fist** | ✊ | Emergency level reset (hold 5s) | All fingertips curled below their joints; circular hold timer |
-| **Index finger pointing (new 4th gesture)** | 👆 | Tutorial step 4: the level-menu cursor only activates on this gesture; confirm with a 1s hold or a pinch | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
+| **Index finger pointing (new 4th gesture)** | 👆 | Hand cursor for the whole interface (menus, dialogs, HUD): hold 1 s on a button or pinch to click. In gameplay the cursor appears only while pointing | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
 
-> 💡 In normal waiting mode (`IDLE`) the level-menu cursor works with any hand pose — the "index finger pointing" gesture is **required only in tutorial step 4**, where it's specifically tested.
+> 💡 The camera starts on the main menu, so the whole game — menu, level select, settings, profile, leaderboard, pause — can be operated by hand without a mouse. Outside gameplay the cursor follows any visible hand; a pinch clicks instantly, pointing and holding for 1 s clicks too. Dropdowns cycle to the next option.
 
 ### 🧠 Наш Твист: Интеллектуальный анатомический дебаггер ошибок
 В отличие от тривиальных игр, где при потере руки игра просто молчит, ECHO включает **активную систему обратной связи**:

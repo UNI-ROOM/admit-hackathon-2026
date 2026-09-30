@@ -191,7 +191,14 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .account-panel .is-me { color: var(--accent-2); }
 .account-panel [hidden], .account-hud [hidden] { display: none; }
 
-.dwell-cursor { position: fixed; z-index: 1000; pointer-events: none; width: 24px; height: 24px; transform: translate(-50%, -50%); border: 3px solid var(--accent-2); border-radius: 50%; }
+/* Hand cursor (ui/pointer.ts): index fingertip, dwell ring fills in 1 s, pinch clicks. */
+.hand-cursor { position: fixed; z-index: 1000; pointer-events: none; inset: auto; margin: 0; padding: 0; overflow: visible; width: 34px; height: 34px; transform: translate(-50%, -50%); border: 3px solid var(--accent-2); border-radius: 50%; box-sizing: border-box;
+  background: conic-gradient(rgba(103, 232, 249, 0.55) calc(var(--progress, 0) * 360deg), transparent 0); transition: width 0.12s ease, height 0.12s ease; }
+.hand-cursor[hidden] { display: none; }
+.hand-cursor--active { width: 44px; height: 44px; border-color: var(--fg); }
+.hand-cursor--click { transform: translate(-50%, -50%) scale(0.7); background: var(--accent-2); }
+.hand-hover { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-2); transform: translateY(-1px); }
+.menu-hand-hint { margin: 18px 0 0; font: 13px system-ui; color: var(--muted); text-align: center; }
 #mode-indicator { align-self: flex-start; padding: 12px 24px; }
 
 .settings-panel .row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--grid); }
