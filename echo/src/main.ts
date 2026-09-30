@@ -57,9 +57,15 @@ function applyMirrorSetting() {
 applyMirrorSetting();
 subscribeSettings(() => applyMirrorSetting());
 
-// Hold a fist for 1.2 s to reset the loop (counted in fixed 60 Hz simulation steps).
-const FIST_HOLD_MS = 1200;
-const fistStabilizer = new StateStabilizer(Math.round(FIST_HOLD_MS / FRAME_MS), false);
+// Hold a fist for 0.7 s to reset the loop (counted in fixed 60 Hz simulation steps).
+// A frame where tracking briefly misses the fist only drains the progress a
+// little instead of restarting it from zero.
+const FIST_HOLD_STEPS = Math.round(700 / FRAME_MS);
+let fistProgress = 0;
+function updateFist(fist: boolean): boolean {
+    fistProgress = fist ? fistProgress + 1 : Math.max(0, fistProgress - 3);
+    return fistProgress >= FIST_HOLD_STEPS;
+}
 const hintStabilizer = new StateStabilizer(15, "");
 
 let handModelReady = false;
@@ -198,10 +204,8 @@ function processFrame(render: boolean) {
     // Either hand can make the reset fist.
     const fistHand = liveHands.find(hand => hand && isFist(hand)) || null;
     if (liveHand && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING' || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 3))) {
-        if (fistStabilizer.update(!!fistHand)) {
-            fistStabilizer.currentStableValue = false;
-            fistStabilizer.candidateValue = false;
-            fistStabilizer.consecutiveCount = 0;
+        if (updateFist(!!fistHand)) {
+            fistProgress = 0;
 
             gameState.recordedEchoes = [];
             gameState.echoIndex = 0;
@@ -224,11 +228,11 @@ function processFrame(render: boolean) {
             return;
         }
 
-        if (render && fistHand && fistStabilizer.candidateValue === true && fistStabilizer.consecutiveCount > 0) {
+        if (render && fistHand && fistProgress > 0) {
             const wrist = fistHand[0];
             const px = wrist.x * canvasElement.width;
             const py = wrist.y * canvasElement.height;
-            const progress = fistStabilizer.consecutiveCount / fistStabilizer.framesRequired;
+            const progress = fistProgress / FIST_HOLD_STEPS;
 
             canvasCtx.beginPath();
             canvasCtx.arc(px, py, 60, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress);
@@ -241,7 +245,7 @@ function processFrame(render: boolean) {
         }
     }
 
-    if (!liveHand) fistStabilizer.update(false);
+    if (!liveHand) updateFist(false);
 
     if (gameState.mode === 'TUTORIAL') {
         if (gameState.tutorialStep === 1) {
