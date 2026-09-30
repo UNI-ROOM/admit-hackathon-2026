@@ -1,0 +1,55 @@
+body { margin: 0; background-color: #050510; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
+#game-container { position: relative; width: 100vw; height: 100vh; background: radial-gradient(circle at center, #1a1a2e 0%, #050510 100%); }
+#webcam { display: none; }
+#game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 10; }
+#ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem; box-sizing: border-box; }
+.status-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 12px; backdrop-filter: blur(5px); text-align: center; transition: all 0.3s ease; pointer-events: auto; }
+#level-switcher { pointer-events: auto; cursor: pointer; }
+.recording { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+.playing { border-color: #06b6d4; box-shadow: 0 0 20px rgba(6, 182, 212, 0.5); }
+
+/* Tutorial Animation */
+@keyframes brief-scoop-path {
+    0%, 8% { transform: translate(118px, 108px) scale(1); opacity: 1; }
+    18% { transform: translate(108px, 92px) scale(1.05); }
+    28%, 36% { transform: translate(102px, 86px) scale(0.92); }
+    58% { transform: translate(232px, 126px) scale(1); }
+    68%, 78% { transform: translate(248px, 142px) scale(0.86); opacity: 1; }
+    88%, 100% { transform: translate(118px, 108px) scale(1); opacity: 0; }
+}
+@keyframes brief-thumb-pinch {
+    0%, 12% { transform: rotate(-32deg) translate(0, 0); }
+    22%, 36% { transform: rotate(-14deg) translate(8px, -10px); }
+    50%, 100% { transform: rotate(-32deg) translate(0, 0); }
+}
+@keyframes brief-index-pinch {
+    0%, 12% { transform: translate(0, 0); }
+    22%, 36% { transform: translate(-6px, 12px); }
+    50%, 100% { transform: translate(0, 0); }
+}
+@keyframes brief-hand-carry {
+    0%, 28% { transform: translate(0, 0); opacity: 1; }
+    58% { transform: translate(108px, 6px); opacity: 1; }
+    72%, 100% { transform: translate(108px, 6px); opacity: 0.3; }
+}
+@keyframes brief-ring-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.72; }
+}
+@keyframes brief-spark-pop {
+    0%, 18% { opacity: 0; transform: scale(0.4); }
+    24% { opacity: 1; transform: scale(1.2); }
+    34% { opacity: 0.85; transform: scale(1); }
+    42%, 100% { opacity: 0; transform: scale(0.5); }
+}
+
+.brief-scoop { transform-box: fill-box; transform-origin: center; animation: brief-scoop-path 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+.brief-hand { transform-box: fill-box; transform-origin: center; animation: brief-hand-carry 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+.brief-thumb { transform-box: fill-box; transform-origin: center; animation: brief-thumb-pinch 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+.brief-index { transform-box: fill-box; transform-origin: center; animation: brief-index-pinch 4.4s cubic-bezier(0.4, 0.1, 0.3, 1) infinite; }
+.brief-ring { transform-box: fill-box; transform-origin: center; animation: brief-ring-pulse 1.8s ease-in-out infinite; }
+.brief-spark { transform-box: fill-box; transform-origin: center; animation: brief-spark-pop 4.4s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .brief-scoop, .brief-hand, .brief-thumb, .brief-index, .brief-ring, .brief-spark { animation: none !important; }
+}

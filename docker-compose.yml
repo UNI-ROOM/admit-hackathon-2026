@@ -1,0 +1,15 @@
+services:
+  echo-game:
+    build:
+      context: ./echo
+      dockerfile: Dockerfile
+      target: dev
+    container_name: echo-game
+    volumes:
+      - ./echo:/app
+      - /app/node_modules
+    ports:
+      - "127.0.0.1:${PORT:-5173}:5173"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
