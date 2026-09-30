@@ -20,19 +20,31 @@ export function unlockAudioContext(): void {
     if (ctx && ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
     }
-    if (musicEnabled && !musicPlaying) {
+    if (musicEnabled) {
         startMusic();
     }
 }
 
-// Auto-unlock on first user gesture/interaction
+// Auto-unlock on first user gesture/interaction anywhere on the page
 if (typeof window !== 'undefined') {
-    const events = ['click', 'pointerdown', 'keydown', 'touchstart'];
+    // Eagerly pre-load audio file in memory
+    getMusicAudio();
+
+    const events = ['click', 'pointerdown', 'keydown', 'touchstart', 'mousemove', 'pointermove', 'focus'];
     const unlocker = () => {
         unlockAudioContext();
-        events.forEach(evt => window.removeEventListener(evt, unlocker));
+        if (musicPlaying) {
+            events.forEach(evt => window.removeEventListener(evt, unlocker));
+        }
     };
-    events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true }));
+    events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true, capture: true }));
+
+    // Attempt immediate playback on initial script load
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        unlockAudioContext();
+    } else {
+        window.addEventListener('DOMContentLoaded', () => unlockAudioContext(), { once: true });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -52,16 +64,31 @@ export function setSfxEnabled(on: boolean): void {
 let musicEnabled = true;
 let musicPlaying = false;
 let musicAudio: HTMLAudioElement | null = null;
+let musicVolume = 0.01;
+
+export function setMusicVolume(volume: number): void {
+    if (typeof volume !== 'number' || isNaN(volume)) {
+        volume = 0.01;
+    }
+    musicVolume = Math.max(0.0, Math.min(1.0, volume));
+    if (musicAudio) {
+        musicAudio.volume = musicVolume;
+    }
+}
 
 function getMusicAudio(): HTMLAudioElement | null {
     if (typeof window === 'undefined') return null;
     if (!musicAudio) {
         musicAudio = new Audio('/bg-music.mp3');
+        musicAudio.preload = 'auto';
         musicAudio.loop = true;
-        musicAudio.volume = 0.2;
+        musicAudio.volume = musicVolume;
+        musicAudio.load();
     }
     return musicAudio;
 }
+
+let playPromise: Promise<void> | null = null;
 
 export function startMusic(): void {
     if (musicPlaying || !musicEnabled) return;
@@ -73,9 +100,14 @@ export function startMusic(): void {
         ctx.resume().catch(() => {});
     }
 
-    audio.play().then(() => {
+    if (playPromise) return;
+
+    playPromise = audio.play();
+    playPromise.then(() => {
         musicPlaying = true;
+        playPromise = null;
     }).catch((err) => {
+        playPromise = null;
         console.warn('Background music playback blocked or failed:', err);
     });
 }

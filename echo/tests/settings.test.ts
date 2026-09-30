@@ -28,6 +28,7 @@ test('defaults are correct', () => {
     assert.deepEqual(s, {
         sfx: true,
         music: true,
+        musicVolume: 0.1,
         mirror: true,
         showSkeleton: true,
         hints: true,
@@ -92,6 +93,7 @@ test('resetSettings restores defaults and notifies subscribers', () => {
     assert.deepEqual(s, {
         sfx: true,
         music: true,
+        musicVolume: 0.1,
         mirror: true,
         showSkeleton: true,
         hints: true,

@@ -78,9 +78,22 @@ export function openSettings(): void {
     const body = document.createElement('div'); panel.append(body);
     const settings = getSettings();
 
+    const volumeWrap = document.createElement('div'); volumeWrap.style.display = 'flex'; volumeWrap.style.alignItems = 'center'; volumeWrap.style.gap = '8px';
+    const volumeSlider = document.createElement('input'); volumeSlider.type = 'range'; volumeSlider.min = '0'; volumeSlider.max = '100'; volumeSlider.step = '1'; volumeSlider.dataset.dwell = '';
+    const initialVol = Math.round((settings.musicVolume ?? 0.1) * 100);
+    volumeSlider.value = String(initialVol);
+    const volumeText = document.createElement('span'); volumeText.style.minWidth = '3em'; volumeText.textContent = `${initialVol}%`;
+    volumeSlider.oninput = () => {
+        const val = parseInt(volumeSlider.value, 10) / 100;
+        volumeText.textContent = `${volumeSlider.value}%`;
+        updateSettings({ musicVolume: val });
+    };
+    volumeWrap.append(volumeSlider, volumeText);
+
     body.append(
         row(t('settings.sfx'), toggle(() => getSettings().sfx, on => updateSettings({ sfx: on }))),
         row(t('settings.music'), toggle(() => getSettings().music, on => updateSettings({ music: on }))),
+        row(t('settings.musicVolume'), volumeWrap),
     );
     void buildCameraSection(body, settings);
     body.append(
