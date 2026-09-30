@@ -1,15 +1,13 @@
 // Hand cursor for the whole interface: the index fingertip moves a cursor over
-// buttons; hold it still for 1 s (dwell) or pinch to click — the same controls
-// the tutorial teaches. Mouse input keeps working alongside it.
-import { isPinching, isPointing } from '../utils';
+// buttons; touch thumb to middle finger to click, or hold still for 1 s (dwell,
+// as taught in the tutorial). The index finger stays on target while clicking.
+// Mouse input keeps working alongside it.
+import { isPointing, isThumbMiddleTouch } from '../utils';
 import { getSettings } from '../settings';
 import type { HandLandmarks } from '../hands';
 
 const DWELL_MS = 1000;
 const CLICK_COOLDOWN_MS = 600;
-// A pinch closes thumb onto index and shifts the fingertip; click whatever was
-// under the cursor just before the pinch started.
-const PINCH_TARGET_MEMORY_MS = 400;
 // Camera edges are hard to reach with a hand, so the inner 80% of the frame
 // already covers the whole screen.
 const EDGE = 0.1;
@@ -27,13 +25,12 @@ document.body.append(cursor);
 let pos: { x: number; y: number } | null = null;
 let target: HTMLElement | null = null;
 let dwellStart = 0;
-let lastTarget: { el: HTMLElement; at: number } | null = null;
-let wasPinching = false;
+let wasTouching = false;
 let lastClick = 0;
 let dialogsOnTop = -1;
 
-// In active gameplay a pinch grabs game objects, so there it must not click
-// the HUD; in menus and dialogs a pinch is a click.
+// Outside gameplay the cursor follows any visible hand; in gameplay it shows
+// only while pointing or clicking, so grabbing objects doesn't bring it up.
 let uiContext = () => true;
 export function setUiContext(fn: () => boolean): void { uiContext = fn; }
 
@@ -76,7 +73,7 @@ function activate(el: HTMLElement, now: number): void {
 }
 
 function pickHand(hands: (HandLandmarks | null)[]): HandLandmarks | null {
-    return hands.find(h => h && (isPointing(h) || isPinching(h))) || hands.find(Boolean) || null;
+    return hands.find(h => h && (isPointing(h) || isThumbMiddleTouch(h, wasTouching))) || hands.find(Boolean) || null;
 }
 
 export function handlePointer(hands: (HandLandmarks | null)[]): void {
@@ -84,11 +81,10 @@ export function handlePointer(hands: (HandLandmarks | null)[]): void {
     const hand = pickHand(hands);
     const ui = uiContext();
     const pointing = !!hand && isPointing(hand);
-    const pinching = !!hand && isPinching(hand);
+    const touching = !!hand && isThumbMiddleTouch(hand, wasTouching);
 
-    // In gameplay only an explicit pointing gesture shows the cursor.
-    if (!hand || (!ui && !pointing)) {
-        show(false); setTarget(null, now); pos = null; wasPinching = false;
+    if (!hand || (!ui && !pointing && !touching)) {
+        show(false); setTarget(null, now); pos = null; wasTouching = false;
         return;
     }
 
@@ -105,22 +101,17 @@ export function handlePointer(hands: (HandLandmarks | null)[]): void {
 
     const hit = document.elementFromPoint(pos.x, pos.y)?.closest<HTMLElement>(CLICKABLE) || null;
     const el = hit && !(hit as HTMLButtonElement).disabled ? hit : null;
-    if (!pinching) {
-        setTarget(el, now);
-        if (el) lastTarget = { el, at: now };
-    }
+    setTarget(el, now);
 
     const cooling = now - lastClick < CLICK_COOLDOWN_MS;
     let progress = 0;
-    if (pinching && !wasPinching && ui && !cooling) {
-        const remembered = lastTarget && now - lastTarget.at < PINCH_TARGET_MEMORY_MS ? lastTarget.el : null;
-        const pinchTarget = remembered || el;
-        if (pinchTarget?.isConnected) activate(pinchTarget, now);
-    } else if (pointing && target && !cooling) {
+    if (touching && !wasTouching && !cooling) {
+        if (target?.isConnected) activate(target, now);
+    } else if (pointing && !touching && target && !cooling) {
         progress = Math.min(1, (now - dwellStart) / DWELL_MS);
         if (progress >= 1) { activate(target, now); progress = 0; }
     }
-    wasPinching = pinching;
+    wasTouching = touching;
     cursor.style.setProperty('--progress', String(progress));
     cursor.classList.toggle('hand-cursor--active', !!target);
 }

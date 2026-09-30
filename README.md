@@ -132,9 +132,9 @@ flowchart LR
 | **Open palm** | 🖐️ | Start a level / begin recording the loop | All 4 fingers extended above their PIP joints, wrist in frame |
 | **Pinch** | 🤏 | Grab and move objects (the little guy, shield, prism); quick confirm for level selection | Euclidean distance between thumb tip and index fingertip `< 0.08` |
 | **Fist** | ✊ | Emergency level reset (hold 5s) | All fingertips curled below their joints; circular hold timer |
-| **Index finger pointing (new 4th gesture)** | 👆 | Hand cursor for the whole interface (menus, dialogs, HUD): hold 1 s on a button or pinch to click. In gameplay the cursor appears only while pointing | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
+| **Index finger pointing (new 4th gesture)** | 👆 | Hand cursor for the whole interface (menus, dialogs, HUD): touch thumb to middle finger to click (the index finger stays on target), or hold 1 s. In gameplay the cursor appears only while pointing | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
 
-> 💡 The camera starts on the main menu, so the whole game — menu, level select, settings, profile, leaderboard, pause — can be operated by hand without a mouse. Outside gameplay the cursor follows any visible hand; a pinch clicks instantly, pointing and holding for 1 s clicks too. Dropdowns cycle to the next option.
+> 💡 The camera starts on the main menu, so the whole game — menu, level select, settings, profile, leaderboard, pause — can be operated by hand without a mouse. Outside gameplay the cursor follows any visible hand; touching thumb to middle finger clicks instantly while the index finger keeps aiming, and pointing and holding for 1 s clicks too. Dropdowns cycle to the next option.
 
 ### 🧠 Наш Твист: Интеллектуальный анатомический дебаггер ошибок
 В отличие от тривиальных игр, где при потере руки игра просто молчит, ECHO включает **активную систему обратной связи**:
