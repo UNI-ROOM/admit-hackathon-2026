@@ -7,6 +7,7 @@ import { cameraPermissionState } from '../camera';
 import { openProfile, openLeaderboard, accountBadge } from '../ui/account';
 import { openSettings } from './settings';
 import { createMenuPanda } from './menu-panda';
+import { touchDevice } from '../device';
 
 const container = document.getElementById('scene-menu');
 
@@ -59,6 +60,7 @@ async function updateStatusLine(): Promise<void> {
     const status = document.getElementById('menu-status-line');
     if (!status) return;
     status.replaceChildren();
+    if (touchDevice) { status.append(statusSegment('ok', t('mobile.ready'))); return; }
     if (statusOverride) {
         status.append(statusSegment('danger', statusOverride));
         return;
@@ -102,13 +104,13 @@ function render(): void {
     h2.textContent = 'ECHO GAME';
     const tagline = document.createElement('p');
     tagline.className = 'menu-tagline';
-    tagline.textContent = t('menu.tagline');
+    tagline.textContent = t(touchDevice ? 'mobile.tagline' : 'menu.tagline');
     titleWrap.append(h1, h2, tagline, accountBadge());
 
     const buttons = document.createElement('div');
     buttons.className = 'menu-buttons';
     buttons.append(
-        button(t('menu.start'), () => show('levels'), 'menu-btn--primary'),
+        button(t(touchDevice ? 'mobile.start' : 'menu.start'), () => show(touchDevice ? 'levels' : 'modes'), 'menu-btn--primary'),
         button(t('menu.profile'), () => openProfile()),
         button(t('menu.leaderboard'), () => openLeaderboard()),
         button(t('menu.settings'), () => openSettings())
@@ -116,7 +118,7 @@ function render(): void {
 
     const hint = document.createElement('p');
     hint.className = 'menu-hand-hint';
-    hint.textContent = t('menu.handHint');
+    hint.textContent = t(touchDevice ? 'mobile.menuHint' : 'menu.handHint');
 
     const status = document.createElement('div');
     status.className = 'menu-status';

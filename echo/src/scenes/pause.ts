@@ -45,9 +45,9 @@ export function isPaused(): boolean {
 // at the MENU button is to *complete* the tutorial rather than actually pause
 // the game, so we special-case it: mark the tutorial done and jump straight
 // to Level Select instead of showing the panel.
-export function openPause(): void {
+export function openPause(completeTutorial = true): void {
     if (current() !== 'game') return;
-    if (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 4) {
+    if (completeTutorial && gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 4) {
         void saveProgress({ tutorialDone: true });
         gameState.mode = 'IDLE';
         gameState.tutorialStep = 0;
@@ -87,3 +87,8 @@ if (menuButton) {
     menuButton.textContent = t('menu.hudMenu');
     menuButton.addEventListener('click', () => openPause());
 }
+dialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    resume();
+});
+dialog.addEventListener('close', () => { if (paused) resume(); });

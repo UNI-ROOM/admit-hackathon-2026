@@ -2,6 +2,7 @@ import { api, type Session, type RunPayload } from '../api';
 import { levelScore, LEVEL_ECHOES, maxEchoesForLevel } from '../../../shared/score';
 import { t } from '../i18n';
 import { onChange } from '../scenes/router';
+import { touchDevice } from '../device';
 let session: Session | null = null;
 let online = false;
 const hud = document.createElement('aside'); hud.className = 'account-hud';
@@ -72,13 +73,13 @@ export async function showResult(p:RunPayload,next:()=>void,replay?:()=>void){
  const score=levelScore({...p,maxEchoes:maxEchoesForLevel(p.levelId,p.difficulty)});open(t('account.levelComplete',{score}));
  const summary=message(t('account.savingResult'));
  let seconds=8;let timer:ReturnType<typeof setInterval>|null=null;
- const countdown=message(t('result.nextIn',{s:seconds}));
+ const countdown=message(t('result.nextIn',{s:seconds}));countdown.hidden=touchDevice;
  const stopCountdown=()=>{if(timer){clearInterval(timer);timer=null;}};
  const nextBtn=button(t('result.next'),()=>{stopCountdown();next();});
  const replayBtn=button(t('result.replay'),()=>{stopCountdown();(replay||next)();});
  const levelsBtn=button(t('result.levelSelect'),()=>{stopCountdown();panel.close();void import('../scenes/router').then(m=>m.show('levels'));});
  panel.append(nextBtn,replayBtn,levelsBtn);
- timer=setInterval(()=>{seconds-=1;if(seconds<=0){stopCountdown();next();return;}countdown.textContent=t('result.nextIn',{s:seconds});},1000);
+ if(!touchDevice)timer=setInterval(()=>{seconds-=1;if(seconds<=0){stopCountdown();next();return;}countdown.textContent=t('result.nextIn',{s:seconds});},1000);
  const container=document.createElement('div');panel.append(container);
  try{if(!session)session=await api.session();const r=await api.run(p);summary.textContent=t('account.bestRank',{best:r.best,rank:r.rank});session=await api.me();online=true;render();}catch{summary.textContent=t('account.offlineNotSaved');offline();}
  await fillBoard(container);
@@ -86,4 +87,3 @@ export async function showResult(p:RunPayload,next:()=>void,replay?:()=>void){
 export function closePanel(){panel.close();}
 export function panelOpen(){return panel.open;}
 render();
-

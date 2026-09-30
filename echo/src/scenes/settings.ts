@@ -4,6 +4,7 @@ import { getSettings, updateSettings, type Settings } from '../settings';
 import { cameraPermissionState, listCameras, requestCameraAccess } from '../camera';
 import { api } from '../api';
 import { refreshSession } from '../ui/account';
+import { touchDevice } from '../device';
 
 const panel = document.createElement('dialog'); panel.className = 'account-panel settings-panel';
 document.body.append(panel);
@@ -105,10 +106,14 @@ export function openSettings(): void {
         row(t('settings.music'), toggle(() => getSettings().music, on => updateSettings({ music: on }))),
         row(t('settings.musicVolume'), volumeWrap),
     );
-    void buildCameraSection(body, settings);
+    if (!touchDevice) {
+        void buildCameraSection(body, settings);
+        body.append(
+            row(t('settings.mirror'), toggle(() => getSettings().mirror, on => updateSettings({ mirror: on }))),
+            row(t('settings.skeleton'), toggle(() => getSettings().showSkeleton, on => updateSettings({ showSkeleton: on }))),
+        );
+    }
     body.append(
-        row(t('settings.mirror'), toggle(() => getSettings().mirror, on => updateSettings({ mirror: on }))),
-        row(t('settings.skeleton'), toggle(() => getSettings().showSkeleton, on => updateSettings({ showSkeleton: on }))),
         row(t('settings.hints'), toggle(() => getSettings().hints, on => updateSettings({ hints: on }))),
     );
     buildLanguageSection(body, settings);

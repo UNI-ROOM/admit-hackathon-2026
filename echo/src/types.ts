@@ -1,7 +1,7 @@
 import type { HandLandmarks } from './hands';
 import type { Difficulty } from '../../shared/score';
 
-export type EchoFrame = { hands: [HandLandmarks | null, HandLandmarks | null] } | HandLandmarks | null;
+export type EchoFrame = { hands: [HandLandmarks | null, HandLandmarks | null]; timeMs?: number } | HandLandmarks | null;
 
 export interface Point {
     x: number;
