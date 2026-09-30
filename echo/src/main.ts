@@ -1,7 +1,7 @@
 import { initializeAccount, requireSignIn, showResult, closePanel, panelOpen } from './ui/account';
 import { handlePointer, setUiContext } from './ui/pointer';
 import './style.css';
-import { FixedStepClock } from './loop';
+import { FixedStepClock, FRAME_MS } from './loop';
 import { loadTrackingRuntime, HANDS_ASSETS } from './tracking-runtime';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
 import {
@@ -57,7 +57,9 @@ function applyMirrorSetting() {
 applyMirrorSetting();
 subscribeSettings(() => applyMirrorSetting());
 
-const fistStabilizer = new StateStabilizer(300, false);
+// Hold a fist for 1.2 s to reset the loop (counted in fixed 60 Hz simulation steps).
+const FIST_HOLD_MS = 1200;
+const fistStabilizer = new StateStabilizer(Math.round(FIST_HOLD_MS / FRAME_MS), false);
 const hintStabilizer = new StateStabilizer(15, "");
 
 let handModelReady = false;
@@ -193,8 +195,10 @@ function processFrame(render: boolean) {
 
     if (panelOpen() || isPaused()) { if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height); canvasCtx.restore(); return; }
 
+    // Either hand can make the reset fist.
+    const fistHand = liveHands.find(hand => hand && isFist(hand)) || null;
     if (liveHand && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING' || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 3))) {
-        if (fistStabilizer.update(isFist(liveHand) && !isPinching(liveHand, true))) {
+        if (fistStabilizer.update(!!fistHand)) {
             fistStabilizer.currentStableValue = false;
             fistStabilizer.candidateValue = false;
             fistStabilizer.consecutiveCount = 0;
@@ -220,8 +224,8 @@ function processFrame(render: boolean) {
             return;
         }
 
-        if (render && fistStabilizer.candidateValue === true && fistStabilizer.consecutiveCount > 0) {
-            const wrist = liveHand[0];
+        if (render && fistHand && fistStabilizer.candidateValue === true && fistStabilizer.consecutiveCount > 0) {
+            const wrist = fistHand[0];
             const px = wrist.x * canvasElement.width;
             const py = wrist.y * canvasElement.height;
             const progress = fistStabilizer.consecutiveCount / fistStabilizer.framesRequired;

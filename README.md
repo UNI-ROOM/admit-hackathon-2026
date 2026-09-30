@@ -80,7 +80,7 @@ flowchart LR
 1. **🎓 Interactive tutorial (4 steps)**:
    - Step 1: Palm calibration — show an open hand 🖐️.
    - Step 2: Pinch calibration — grab the cube and move it into the teleport zone 🤏.
-   - Step 3: Fist-reset calibration ✊ (hold for 5 seconds for an instant restart).
+   - Step 3: Fist-reset calibration ✊ (hold for about 1 second to restart the loop).
    - Step 4: **New 4th gesture — index finger pointing 👆** — aim at the ☰ MENU button and hold for 1 second.
 2. **Level 1: Prism & Crystal (Optics & Refraction)**:
    - A vertical laser is reflected by a prism at a 90° angle.
@@ -137,7 +137,7 @@ flowchart LR
 | :--- | :---: | :--- | :--- |
 | **Open palm** | 🖐️ | Start a level / begin recording the loop | All 4 fingers extended above their PIP joints, wrist in frame |
 | **Pinch** | 🤏 | Grab and move objects (the little guy, shield, prism); quick confirm for level selection | Euclidean distance between thumb tip and index fingertip `< 0.08` |
-| **Fist** | ✊ | Emergency level reset (hold 5s) | All fingertips curled below their joints; circular hold timer |
+| **Fist** | ✊ | Loop reset (hold ~1.2 s, either hand) | Every fingertip closer to the wrist than its middle joint — works with the fist turned sideways and never matches a pinch; circular hold timer |
 | **Index finger pointing (new 4th gesture)** | 👆 | Hand cursor for the whole interface (menus, dialogs, HUD): touch thumb to middle finger to click (the index finger stays on target), or hold 1 s. In gameplay the cursor appears only while pointing | Index fingertip above its PIP joint while middle, ring and pinky are curled below theirs; gesture reads **vertically** — point upward; debounced with `StateStabilizer(5)` |
 
 > 💡 The camera starts on the main menu, so the whole game — menu, level select, settings, profile, leaderboard, pause — can be operated by hand without a mouse. Outside gameplay the cursor follows any visible hand; touching thumb to middle finger clicks instantly while the index finger keeps aiming, and holding the cursor on a button for 1 s clicks too (any hand pose; it clicks once and re-arms after you move). Dropdowns cycle to the next option.

@@ -24,11 +24,16 @@ export class StateStabilizer {
     }
 }
 
+// Fist: every fingertip folded back closer to the wrist than its middle joint.
+// Distances make it work with the fist turned sideways, and a pinch never
+// matches because the pinching index finger stays extended.
 export function isFist(landmarks: any[]) {
+    if (!landmarks || landmarks.length < 21) return false;
+    const toWrist = (i: number) => Math.hypot(landmarks[i].x - landmarks[0].x, landmarks[i].y - landmarks[0].y);
     const tips = [8, 12, 16, 20];
     const joints = [6, 10, 14, 18];
     for (let i = 0; i < 4; i++) {
-        if (landmarks[tips[i]].y <= landmarks[joints[i]].y) return false;
+        if (toWrist(tips[i]) >= toWrist(joints[i])) return false;
     }
     return true;
 }
