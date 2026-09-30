@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameState, resetLevel, handleDragAndDrop, triggerManDeath, man, lever, plate, prism } from '../src/game';
+import { gameState, resetLevel, handleDragAndDrop, triggerManDeath, man, lever, plate, prism, RESERVE_HOLD_STEPS } from '../src/game';
 import type { Entity } from '../src/types';
 
 const ctx = new Proxy({} as CanvasRenderingContext2D, {
@@ -28,8 +28,10 @@ function drag(hand: ReturnType<typeof pinch> | null, agent: string) {
 
 function recordGrab(object: Entity) {
     const hand = pinch(object);
-    gameState.recordedEchoes[gameState.echoIndex].push(hand);
-    drag(hand, 'live');
+    for (let i = 0; i <= RESERVE_HOLD_STEPS; i++) {
+        gameState.recordedEchoes[gameState.echoIndex].push(hand);
+        drag(hand, 'live');
+    }
     assert.equal(object.grabbedBy, 'live');
     gameState.recordedEchoes[gameState.echoIndex].push(null);
     drag(null, 'live');
@@ -159,4 +161,44 @@ test('new attempts and level changes discard old reservations', () => {
     startRecording(3);
     drag(pinch(plate!), 'live');
     assert.equal(plate!.grabbedBy, 'live', 'shield is free on a new level');
+});
+
+test('a brief accidental grab while recording does not reserve the object', () => {
+    startRecording(2);
+    const hand = pinch(plate!);
+    for (let i = 0; i < 5; i++) drag(hand, 'live');
+    assert.equal(plate!.grabbedBy, 'live');
+    drag(null, 'live');
+    gameState.mode = 'PLAYING';
+    resetLevel();
+    drag(pinch(plate!), 'live');
+    assert.equal(plate!.grabbedBy, 'live', 'shield stays free for the live player');
+});
+
+test('dragging an object quickly still reserves it', () => {
+    startRecording(2);
+    const start = pinch(plate!);
+    drag(start, 'live');
+    const moved = start.map(p => ({ ...p, x: p.x - 0.1 }));
+    drag(moved, 'live');
+    drag(null, 'live');
+    gameState.mode = 'PLAYING';
+    resetLevel();
+    drag(pinch(plate!), 'live');
+    assert.equal(plate!.grabbedBy, null);
+});
+
+test('pinching the shield next to the man grabs the shield, not the man', () => {
+    gameState.currentLevel = 3;
+    gameState.mode = 'IDLE';
+    gameState.recordedEchoes = [];
+    resetLevel();
+    gameState.mode = 'PLAYING';
+    gameState.livePlay = true;
+    plate!.x = man.x - 0.12;
+    plate!.y = man.y;
+    const hand = Array.from({ length: 21 }, () => ({ x: plate!.x + 0.05, y: plate!.y, z: 0 }));
+    drag(hand, 'live');
+    assert.equal(plate!.grabbedBy, 'live');
+    assert.equal(man.grabbedBy, null);
 });
