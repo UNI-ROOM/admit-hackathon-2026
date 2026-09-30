@@ -10,7 +10,6 @@ import {
 import { LEVELS } from '../src/levels';
 import { playSfx, unlockAudioContext } from '../src/audio';
 
-
 test('Build check: npm run build succeeds cleanly', () => {
     try {
         const rootDir = path.resolve(process.cwd(), '..');
@@ -30,7 +29,6 @@ test('Build check: npm run build succeeds cleanly', () => {
 });
 
 test('Multi-echo logic: maxEchoes supports one, two and three recorded past selves', () => {
-    // Check LEVELS configuration definitions
     const lvl1 = LEVELS.find(l => l.id === 1);
     const lvl2 = LEVELS.find(l => l.id === 2);
     const lvl3 = LEVELS.find(l => l.id === 3);
@@ -44,7 +42,6 @@ test('Multi-echo logic: maxEchoes supports one, two and three recorded past selv
     assert.strictEqual(lvl3.maxEchoes, 3, 'Level 3 maxEchoes must be 3');
     assert.strictEqual(lvl3.title, 'Level 3: Multi-Echo', 'Level 3 title must be "Level 3: Multi-Echo"');
 
-    // Check runtime gameState behavior with resetLevel()
     gameState.currentLevel = 1;
     resetLevel();
     assert.strictEqual(gameState.maxEchoes, 1, 'gameState.maxEchoes must be 1 on Level 1');
@@ -69,11 +66,9 @@ test('Multi-echo agent styling and naming (ghost_0, ghost_1, live)', () => {
 });
 
 test('Moving laser parameters (minX, maxX, speed) exist on Level 2 and Level 3', () => {
-    // Level 1: static laser
     const lvl1 = LEVELS.find(l => l.id === 1);
     assert.strictEqual(lvl1?.laser?.minX, undefined, 'Level 1 laser should not move');
 
-    // Level 2
     const lvl2 = LEVELS.find(l => l.id === 2);
     assert.ok(lvl2?.laser, 'Level 2 must have a laser');
     assert.strictEqual(lvl2.laser.active, true, 'Level 2 laser must be active');
@@ -84,7 +79,6 @@ test('Moving laser parameters (minX, maxX, speed) exist on Level 2 and Level 3',
     assert.ok(lvl2.laser.minX! >= 0 && lvl2.laser.maxX! <= 1, 'Laser bounds must be within [0, 1] on Level 2');
     assert.ok(lvl2.laser.speed! > 0, 'Laser speed must be positive on Level 2');
 
-    // Level 3
     const lvl3 = LEVELS.find(l => l.id === 3);
     assert.ok(lvl3?.laser, 'Level 3 must have a laser');
     assert.strictEqual(lvl3.laser.active, true, 'Level 3 laser must be active');
@@ -95,7 +89,6 @@ test('Moving laser parameters (minX, maxX, speed) exist on Level 2 and Level 3',
     assert.ok(lvl3.laser.minX! >= 0 && lvl3.laser.maxX! <= 1, 'Laser bounds must be within [0, 1] on Level 3');
     assert.ok(lvl3.laser.speed! > 0, 'Laser speed must be positive on Level 3');
 
-    // Runtime state checks
     gameState.currentLevel = 2;
     resetLevel();
     assert.ok(laser, 'Runtime laser should be initialized for Level 2');
@@ -118,16 +111,13 @@ test('Frame progress synchronization between clones and laser oscillation', () =
 
     gameState.mode = 'PLAYING';
     const totalFrames = 100;
-    // Simulate recorded echo with 100 frames
     gameState.recordedEchoes = [new Array(totalFrames).fill({ x: 0.5, y: 0.5 })];
 
-    // At frame 0: progress = 0, t = 0 => sin(0) = 0 => laser.x = midX
     gameState.currentFrame = 0;
     evaluateRules();
     const midX = (laser.minX! + laser.maxX!) / 2;
     assert.ok(Math.abs(laser.x - midX) < 1e-4, `At progress 0, laser.x (${laser.x}) should be at midX (${midX})`);
 
-    // At progress > 0: laser.x must remain strictly within [minX, maxX]
     for (let f = 0; f < totalFrames; f += 10) {
         gameState.currentFrame = f;
         evaluateRules();
@@ -148,10 +138,8 @@ test('Laser collision and shield blocking mechanics', () => {
     gameState.recordedEchoes = [new Array(50).fill(null)];
     gameState.currentFrame = 0;
 
-    // Laser default position
     evaluateRules();
 
-    // 1. Man touches laser without shield -> man dies and resets to spawn
     man.x = laser.x;
     man.y = 0.5;
     man.grabbedBy = 'live';
@@ -162,7 +150,6 @@ test('Laser collision and shield blocking mechanics', () => {
     assert.strictEqual(man.y, lvl2.man.y, 'Man should be reset to spawn y on laser death');
     assert.strictEqual(man.grabbedBy, null, 'Man grabbedBy should be cleared on death');
 
-    // 2. Shield plate placed directly under laser source above man -> blocks laser beam
     plate.x = laser.x;
     plate.y = 0.3;
     plate.height = 0.05;
@@ -171,7 +158,6 @@ test('Laser collision and shield blocking mechanics', () => {
     const expectedHeight = (plate.y - plate.height / 2) - laser.y;
     assert.ok(Math.abs(laser.height - expectedHeight) < 1e-4, 'Laser beam should be stopped by plate');
 
-    // Now man walks below the shield at y = 0.7 -> laser does not reach man
     man.x = laser.x;
     man.y = 0.7;
     man.grabbedBy = 'live';
@@ -183,7 +169,6 @@ test('Laser collision and shield blocking mechanics', () => {
 });
 
 test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
-    // Check initial level placements use normalized [0, 1] coordinates
     for (const lvl of LEVELS) {
         assert.ok(lvl.man.x >= 0 && lvl.man.x <= 1, `Level ${lvl.id} man.x should be in [0, 1]`);
         assert.ok(lvl.man.y >= 0 && lvl.man.y <= 1, `Level ${lvl.id} man.y should be in [0, 1]`);
@@ -195,7 +180,6 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
         }
     }
 
-    // Check free continuous movement without grid snapping
     gameState.currentLevel = 2;
     resetLevel();
 
@@ -204,14 +188,12 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
         save: () => {}, restore: () => {}, translate: () => {}, scale: () => {}, fillText: () => {}
     } as any;
 
-    // Simulate free continuous hand positions
     const arbitraryPositions = [
         { x: 0.123456, y: 0.654321 },
         { x: 0.456789, y: 0.789123 },
         { x: 0.823412, y: 0.234567 }
     ];
 
-    // Grab man
     man.x = 0.5;
     man.y = 0.5;
     man.grabbedBy = null;
@@ -238,7 +220,6 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
         const prevY = man.y;
         handleDragAndDrop(mockCtx, 1000, 1000, hand, 'live');
         
-        // Continuous float update: man.x += (px - man.x) * 0.15
         const expectedX = prevX + (pos.x - prevX) * 0.15;
         const expectedY = prevY + (pos.y - prevY) * 0.15;
         assert.ok(Math.abs(man.x - expectedX) < 1e-6, 'Man movement should be continuous float interpolation');
@@ -247,7 +228,6 @@ test('Free-movement coordinates [0, 1] without lane/grid mechanics', () => {
         assert.ok(man.y >= 0 && man.y <= 1, 'Man y must remain within [0, 1]');
     }
 
-    // Ensure game codebase has no discrete grid lane restrictions
     const gameCode = fs.readFileSync(path.join(process.cwd(), 'src/game.ts'), 'utf8');
     assert.doesNotMatch(gameCode, /Math\.floor\([^)]*\)\s*\*\s*grid/, 'Game should not contain grid-quantizing calculations');
     assert.doesNotMatch(gameCode, /const\s+LANES\s*=/, 'Game should not define discrete lanes');
@@ -292,14 +272,12 @@ test('Level 1 configuration: title, crystal, prism with direction left, door, an
     assert.ok(lvl, 'Level 1 must be defined in LEVELS');
     assert.strictEqual(lvl.title, 'Level 1: Prism & Crystal', 'Level 1 title should match');
 
-    // Crystal
     assert.ok(lvl.crystal, 'Level 1 must have a crystal config');
     assert.strictEqual(typeof lvl.crystal.x, 'number');
     assert.strictEqual(typeof lvl.crystal.y, 'number');
     assert.strictEqual(typeof lvl.crystal.width, 'number');
     assert.strictEqual(typeof lvl.crystal.height, 'number');
 
-    // Prism
     assert.ok(lvl.prism, 'Level 1 must have a prism config');
     assert.strictEqual(typeof lvl.prism.x, 'number');
     assert.strictEqual(typeof lvl.prism.y, 'number');
@@ -307,14 +285,12 @@ test('Level 1 configuration: title, crystal, prism with direction left, door, an
     assert.strictEqual(typeof lvl.prism.height, 'number');
     assert.strictEqual(lvl.prism.direction, 'left', 'Level 1 prism direction must be left');
 
-    // Door
     assert.ok(lvl.door, 'Level 1 must have a door config');
     assert.strictEqual(typeof lvl.door.x, 'number');
     assert.strictEqual(typeof lvl.door.y, 'number');
     assert.strictEqual(typeof lvl.door.width, 'number');
     assert.strictEqual(typeof lvl.door.height, 'number');
 
-    // Laser
     assert.ok(lvl.laser, 'Level 1 must have a laser config');
     assert.strictEqual(lvl.laser.active, true, 'Level 1 laser must be active');
     assert.strictEqual(typeof lvl.laser.x, 'number');
@@ -322,7 +298,6 @@ test('Level 1 configuration: title, crystal, prism with direction left, door, an
     assert.strictEqual(typeof lvl.laser.width, 'number');
     assert.strictEqual(typeof lvl.laser.height, 'number');
 
-    // Runtime state checks
     gameState.currentLevel = 1;
     resetLevel();
     assert.ok(crystal, 'Runtime crystal should be initialized on Level 1');
@@ -347,7 +322,6 @@ test('Procedural audio export: playSfx and unlockAudioContext in src/audio.ts', 
     assert.strictEqual(typeof playSfx, 'function', 'playSfx must be exported as a function');
     assert.strictEqual(typeof unlockAudioContext, 'function', 'unlockAudioContext must be exported as a function');
 
-    // Test calling safely in headless / node environment without errors
     assert.doesNotThrow(() => {
         unlockAudioContext();
     }, 'unlockAudioContext should execute safely');

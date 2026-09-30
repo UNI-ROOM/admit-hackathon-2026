@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isThumbMiddleTouch, thumbMiddleRatio, THUMB_MIDDLE_ON, THUMB_MIDDLE_OFF } from '../src/utils';
 
-// Open hand: wrist at the bottom, middle knuckle 0.2 above it, fingertips spread.
 function hand(thumb: { x: number; y: number }) {
     const h = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.5 }));
     h[0] = { x: 0.5, y: 0.8 };
@@ -12,7 +11,7 @@ function hand(thumb: { x: number; y: number }) {
     h[4] = thumb;
     return h;
 }
-const hs = 0.2; // hand size: wrist → middle knuckle
+const hs = 0.2;
 
 test('open hand is not a click', () => {
     assert.equal(isThumbMiddleTouch(hand({ x: 0.3, y: 0.65 })), false);

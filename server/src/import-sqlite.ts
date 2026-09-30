@@ -13,7 +13,6 @@ const snapshotSchema = z.object({
   users: z.array(row), sessions: z.array(row), login_codes: z.array(row), runs: z.array(row), progress: z.array(row),
 });
 
-/** One-time import. Refuses to overwrite or merge a populated PostgreSQL database. */
 export async function importSqliteSnapshot(db: Database, input: unknown) {
   const snapshot = snapshotSchema.parse(input);
   return db.transaction(async tx => {

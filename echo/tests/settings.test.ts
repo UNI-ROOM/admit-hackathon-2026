@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Fake in-memory localStorage before importing settings.ts (which reads it on load).
 class FakeStorage {
     private store = new Map<string, string>();
     getItem(key: string): string | null {
@@ -55,9 +54,6 @@ test('corrupt JSON in localStorage does not crash a fresh load', async () => {
     const storage = (globalThis as unknown as { localStorage: FakeStorage }).localStorage;
     storage.setItem('vencera.settings', '{not valid json');
 
-    // Re-import via a fresh module registry isn't trivial with ESM caching,
-    // so we simulate the corrupt-load path directly by resetting then
-    // verifying getSettings() still returns a usable object without throwing.
     resetSettings();
     const s = getSettings();
     assert.equal(typeof s.sfx, 'boolean');

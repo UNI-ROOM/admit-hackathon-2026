@@ -1,7 +1,7 @@
 import type { HandLandmarks } from './hands';
 import type { Difficulty } from '../../shared/score';
 
-export type EchoFrame = { hands: [HandLandmarks | null, HandLandmarks | null] } | HandLandmarks | null;
+export type EchoFrame = { hands: [HandLandmarks | null, HandLandmarks | null]; timeMs?: number } | HandLandmarks | null;
 
 export interface Point {
     x: number;
@@ -58,8 +58,8 @@ export interface Laser {
 export interface Crystal extends Entity {
     width: number;
     height: number;
-    charge: number;      // 0.0 to 1.0
-    charged: boolean;    // true when charge >= 1.0
+    charge: number;
+    charged: boolean;
     baseY?: number;
 }
 

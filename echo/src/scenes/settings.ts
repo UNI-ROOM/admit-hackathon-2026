@@ -1,9 +1,9 @@
-// Settings panel: device preferences, camera, language, reset progress.
 import { t } from '../i18n';
 import { getSettings, updateSettings, type Settings } from '../settings';
 import { cameraPermissionState, listCameras, requestCameraAccess } from '../camera';
 import { api } from '../api';
 import { refreshSession } from '../ui/account';
+import { touchDevice } from '../device';
 
 const panel = document.createElement('dialog'); panel.className = 'account-panel settings-panel';
 document.body.append(panel);
@@ -65,7 +65,7 @@ function buildResetSection(container: HTMLElement): void {
     const b = button(t('settings.reset'), () => {
         if (!armed) { armed = true; msg.hidden = false; msg.textContent = t('settings.reset.confirm'); return; }
         void (async () => {
-            try { await api.logout(); await refreshSession(); msg.textContent = t('settings.reset.done'); } catch { /* offline: leave message as confirm */ }
+            try { await api.logout(); await refreshSession(); msg.textContent = t('settings.reset.done'); } catch { }
             armed = false;
         })();
     });
@@ -78,7 +78,6 @@ export function openSettings(): void {
     const body = document.createElement('div'); panel.append(body);
     const settings = getSettings();
 
-    // Styled slider for the mouse, plus −/+ buttons (5% steps) for the hand cursor.
     const volumeWrap = document.createElement('div'); volumeWrap.className = 'volume-control';
     const volumeSlider = document.createElement('input'); volumeSlider.type = 'range'; volumeSlider.min = '0'; volumeSlider.max = '100'; volumeSlider.step = '1';
     volumeSlider.className = 'volume-slider'; volumeSlider.setAttribute('aria-label', t('settings.musicVolume'));
@@ -105,10 +104,14 @@ export function openSettings(): void {
         row(t('settings.music'), toggle(() => getSettings().music, on => updateSettings({ music: on }))),
         row(t('settings.musicVolume'), volumeWrap),
     );
-    void buildCameraSection(body, settings);
+    if (!touchDevice) {
+        void buildCameraSection(body, settings);
+        body.append(
+            row(t('settings.mirror'), toggle(() => getSettings().mirror, on => updateSettings({ mirror: on }))),
+            row(t('settings.skeleton'), toggle(() => getSettings().showSkeleton, on => updateSettings({ showSkeleton: on }))),
+        );
+    }
     body.append(
-        row(t('settings.mirror'), toggle(() => getSettings().mirror, on => updateSettings({ mirror: on }))),
-        row(t('settings.skeleton'), toggle(() => getSettings().showSkeleton, on => updateSettings({ showSkeleton: on }))),
         row(t('settings.hints'), toggle(() => getSettings().hints, on => updateSettings({ hints: on }))),
     );
     buildLanguageSection(body, settings);

@@ -114,7 +114,6 @@ export function createApp({ db, sendCode, production = false, origin, now = Date
     const code = randomInt(0, 1000000).toString().padStart(6, '0');
     const digest = hash(code + email);
     const allowed = await db.transaction(async tx => {
-      // Serialize the global quota check, including across API processes.
       await tx.run('SELECT pg_advisory_xact_lock(820260931)');
       const previous = await tx.one('SELECT requested_at FROM login_codes WHERE email=$1', [email]);
       if (previous && now() - Number(previous.requested_at) < 60000) return false;
@@ -139,7 +138,6 @@ export function createApp({ db, sendCode, production = false, origin, now = Date
     if (!sessionUser) return c.json({ error: 'unauthorized' }, 401);
     const { email, code } = z.object({ email: emailSchema, code: z.string().regex(/^\d{6}$/) }).parse(await c.req.json());
     const verified = await db.transaction(async tx => {
-      // Code consumption, guest merge and token rotation must commit together.
       await tx.run('SELECT pg_advisory_xact_lock(820260932)');
       const current = await tx.one<User>('SELECT id,email,nickname FROM users WHERE id=$1 FOR UPDATE', [sessionUser.id]);
       if (!current) return null;

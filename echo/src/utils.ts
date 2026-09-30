@@ -24,9 +24,6 @@ export class StateStabilizer {
     }
 }
 
-// Fist: every fingertip folded back closer to the wrist than its middle joint.
-// Distances make it work with the fist turned sideways, and a pinch never
-// matches because the pinching index finger stays extended.
 export function isFist(landmarks: any[]) {
     if (!landmarks || landmarks.length < 21) return false;
     const toWrist = (i: number) => Math.hypot(landmarks[i].x - landmarks[0].x, landmarks[i].y - landmarks[0].y);
@@ -48,8 +45,6 @@ export function isOpenPalm(landmarks: any[]) {
     return straight === 4 && landmarks[0].y < 0.8;
 }
 
-// The palm provides a scale reference, so moving nearer/further from the
-// camera does not change the gesture. A wider release threshold avoids chatter.
 export function isPinching(landmarks: any[] | null, wasPinching = false) {
     if (!landmarks || landmarks.length < 21) return false;
     const distance = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
@@ -60,9 +55,6 @@ export function isPinching(landmarks: any[] | null, wasPinching = false) {
     return distance < threshold;
 }
 
-// UI click: thumb tip touching the middle fingertip. Measured relative to hand
-// size (wrist → middle knuckle) so it works at any distance from the camera.
-// Hysteresis keeps one touch from flickering into several clicks.
 export const THUMB_MIDDLE_ON = 0.3;
 export const THUMB_MIDDLE_OFF = 0.45;
 export function thumbMiddleRatio(landmarks: any[]) {
@@ -72,15 +64,12 @@ export function thumbMiddleRatio(landmarks: any[]) {
 export function isThumbMiddleTouch(landmarks: any[], wasTouching = false) {
     if (!landmarks || landmarks.length < 21) return false;
     const ratio = thumbMiddleRatio(landmarks);
-    // An index pinch brings the thumb closer to the index tip; don't count it.
     const nearerIndex = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y)
         < Math.hypot(landmarks[4].x - landmarks[12].x, landmarks[4].y - landmarks[12].y);
     if (nearerIndex) return false;
     return ratio < (wasTouching ? THUMB_MIDDLE_OFF : THUMB_MIDDLE_ON);
 }
 
-// 4th gesture: index finger pointing ( указательный палец )
-// Index finger extended above its PIP joint, middle/ring/pinky curled below theirs.
 export function isPointing(landmarks: any[]) {
     if (!landmarks || landmarks.length < 21) return false;
     const indexExtended = landmarks[8].y < landmarks[6].y;
@@ -94,7 +83,6 @@ export function isPointing(landmarks: any[]) {
 export function drawUnmirroredText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, font: string, color: string) {
     ctx.save();
     ctx.translate(x, y);
-    // Counter-flip only while the canvas itself is CSS-mirrored, so labels stay readable either way.
     if (ctx.canvas?.classList?.contains?.('mirrored') ?? true) ctx.scale(-1, 1);
     ctx.font = font;
     ctx.fillStyle = color;

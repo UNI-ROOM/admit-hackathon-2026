@@ -52,7 +52,6 @@ for (const [name, level, getObject] of [
         const object = getObject();
         const initialPosition = { x: object.x, y: object.y };
 
-        // The clone has not reached its recorded pickup yet.
         drag(null, 'ghost_0');
         drag(pinch(object), 'live');
         assert.equal(object.grabbedBy, null);
@@ -63,7 +62,6 @@ for (const [name, level, getObject] of [
         drag(pinch(object), 'live');
         assert.equal(object.grabbedBy, 'ghost_0');
 
-        // Tracking loss or a recorded release must not let another actor steal it.
         drag(null, 'ghost_0');
         drag(pinch(object), 'live');
         assert.equal(object.grabbedBy, null);

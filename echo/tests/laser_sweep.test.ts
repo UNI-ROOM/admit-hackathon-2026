@@ -15,11 +15,11 @@ function start(level: number, difficulty: 'easy' | 'hard') {
     plate!.x = .99; plate!.y = .2; plate!.grabbedBy = 'live_1';
 }
 
-test('wide laser sweep leaves the entrance and both ends of every lever safe for a complete loop', () => {
+test('restored central laser sweep leaves the entrance, levers and outer paths safe for a complete loop', () => {
     for (const difficulty of ['easy', 'hard'] as const) for (const level of [2, 3]) {
         start(level, difficulty);
         const entrance = getLevelConfig(level, difficulty).man;
-        const positions = [entrance, ...levers.flatMap(lever => [
+        const positions = [entrance, { x: .25, y: .7 }, { x: .75, y: .7 }, ...levers.flatMap(lever => [
             { x: lever.x, y: lever.y }, { x: lever.x, y: lever.y + .2 }
         ])];
         let minX = 1, maxX = 0;
@@ -32,32 +32,33 @@ test('wide laser sweep leaves the entrance and both ends of every lever safe for
             }
             minX = Math.min(minX, laser!.x); maxX = Math.max(maxX, laser!.x);
         }
-        assert.ok(minX < .08 && maxX > .92, 'the beam must reach both sides of the map');
+        assert.ok(minX >= .38 && maxX <= .62, 'the beam stays in the original central corridor');
+        assert.ok(minX < .39 && maxX > .61, 'the beam still moves across the full original corridor');
     }
     gameState.difficulty = 'hard';
 });
 
-test('the newly covered outer area is deadly without a shield, while a matching shield still protects the player', () => {
+test('the central corridor remains deadly without a shield, while a matching shield protects the player', () => {
     const realNow = Date.now;
     let now = 100000;
     Date.now = () => now;
     try {
         for (const level of [2, 3]) {
             start(level, 'hard');
-            const phase = Math.round((Math.PI * 1.5 / laser!.speed!) * 60);
+            const phase = Math.round((Math.PI * .5 / laser!.speed!) * 60);
             gameState.currentFrame = phase;
             evaluateRules();
             const x = laser!.x;
-            assert.ok(x < .08, 'exercise the area beyond the old 38% bound');
+            assert.ok(x > .61 && x <= .62, 'exercise the original moving beam near its right bound');
             man.x = x; man.y = .7; man.grabbedBy = 'live';
             evaluateRules();
             assert.equal(gameState.deaths, 1);
-            now += 2000; // A cooldown cannot hide a second collision.
+            now += 2000;
             gameState.currentFrame = phase;
             plate!.x = x; plate!.y = .2;
             man.x = x; man.y = .7; man.grabbedBy = 'live';
             evaluateRules();
-            assert.equal(gameState.deaths, 1, 'the shield must block the extended sweep');
+            assert.equal(gameState.deaths, 1, 'the shield must block the central sweep');
             assert.equal(man.grabbedBy, 'live');
         }
     } finally { Date.now = realNow; }
@@ -90,7 +91,6 @@ test('the beam grazing just past the shield edge does not kill the man under it'
         resetLevel();
         man.x = 0.5; man.y = 0.8; man.grabbedBy = 'live';
         plate!.x = 0.5 + plate!.width / 2 - 0.02; plate!.y = 0.6; plate!.grabbedBy = 'live_1';
-        // Beam just outside the shield's left edge, within the old wide hitbox.
         const edge = plate!.x - plate!.width / 2 - laser!.width / 2 - 0.005;
         laser!.minX = edge; laser!.maxX = edge;
         evaluateRules();

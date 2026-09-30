@@ -47,7 +47,6 @@ export async function openDatabase(connectionString: string, schema = 'public') 
   const db = new Database(pool);
   try {
     await db.transaction(async tx => {
-      // Multiple API processes may start together during deployment.
       await tx.run('SELECT pg_advisory_xact_lock(820260930)');
       await tx.run(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
       await tx.run(`

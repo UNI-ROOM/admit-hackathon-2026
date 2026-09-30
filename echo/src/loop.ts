@@ -1,5 +1,3 @@
-// Physics and recording run at 60 Hz regardless of camera inference speed.
-// Catch-up is bounded so resuming a suspended tab never produces a huge burst.
 export const FRAME_MS = 1000 / 60;
 export class FixedStepClock {
     private last: number | null = null;

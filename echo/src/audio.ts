@@ -1,4 +1,3 @@
-// Web Audio API procedural sound effects for ECHO
 
 export type SfxId = 'grab' | 'drop' | 'burn' | 'crystal_charge' | 'crystal_ready' | 'switch' | 'win';
 
@@ -25,19 +24,11 @@ export function unlockAudioContext(): void {
     }
 }
 
-// ---------------------------------------------------------------------------
-// SFX enable/disable
-// ---------------------------------------------------------------------------
-
 let sfxEnabled = true;
 
 export function setSfxEnabled(on: boolean): void {
     sfxEnabled = on;
 }
-
-// ---------------------------------------------------------------------------
-// Background music playback: /bg-music.mp3
-// ---------------------------------------------------------------------------
 
 let musicEnabled = true;
 let musicPlaying = false;
@@ -107,7 +98,6 @@ export function setMusicEnabled(on: boolean): void {
     startMusic();
 }
 
-// Debounce limits in ms to prevent audio spamming in 60fps loops
 const DEBOUNCE_MS: Record<SfxId, number> = {
     grab: 60,
     drop: 60,
@@ -170,7 +160,7 @@ function playBurn(ctx: AudioContext): void {
     osc1.frequency.setValueAtTime(120, now);
     osc1.frequency.exponentialRampToValueAtTime(45, now + 0.25);
 
-    osc2.frequency.setValueAtTime(127, now); // Dissonant minor second
+    osc2.frequency.setValueAtTime(127, now);
     osc2.frequency.exponentialRampToValueAtTime(42, now + 0.25);
 
     gain.gain.setValueAtTime(0.28, now);
@@ -211,7 +201,6 @@ function playCrystalCharge(ctx: AudioContext): void {
 
 function playCrystalReady(ctx: AudioContext): void {
     const now = ctx.currentTime;
-    // Radiant chord chime arpeggio (E major shimmer): E5, G#5, B5, E6, G#6
     const freqs = [659.25, 830.61, 987.77, 1318.51, 1661.22];
     freqs.forEach((freq, idx) => {
         const tStart = now + idx * 0.06;
@@ -237,7 +226,6 @@ function playCrystalReady(ctx: AudioContext): void {
 function playSwitch(ctx: AudioContext): void {
     const now = ctx.currentTime;
 
-    // Body thud
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'triangle';
@@ -252,7 +240,6 @@ function playSwitch(ctx: AudioContext): void {
     osc.start(now);
     osc.stop(now + 0.06);
 
-    // Crisp high transient click
     const click = ctx.createOscillator();
     const clickGain = ctx.createGain();
     click.type = 'square';
@@ -270,7 +257,6 @@ function playSwitch(ctx: AudioContext): void {
 
 function playWin(ctx: AudioContext): void {
     const now = ctx.currentTime;
-    // Triumphant victory fanfare arpeggio: C5 -> E5 -> G5 -> C6
     const arpNotes = [
         { f: 523.25, t: 0.0, d: 0.12 },
         { f: 659.25, t: 0.12, d: 0.12 },
@@ -297,7 +283,6 @@ function playWin(ctx: AudioContext): void {
         osc.stop(tStart + d);
     });
 
-    // Sustained triumph chord
     const chordNotes = [523.25, 659.25, 783.99, 1046.50];
     const chordStart = now + 0.42;
     const chordDur = 0.75;
@@ -365,15 +350,10 @@ export function playSfx(id: SfxId): void {
                 break;
         }
     } catch {
-        // Silently continue if audio playback fails
     }
 }
 
-// Runs last: the music state above must be initialized first (a bundled
-// module turns an earlier call into volume = undefined and aborts startup).
-// Auto-unlock on first user gesture/interaction anywhere on the page
 if (typeof window !== 'undefined') {
-    // Eagerly pre-load audio file in memory
     getMusicAudio();
 
     const events = ['click', 'pointerdown', 'keydown', 'touchstart', 'mousemove', 'pointermove', 'focus'];
@@ -385,7 +365,6 @@ if (typeof window !== 'undefined') {
     };
     events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true, capture: true }));
 
-    // Attempt immediate playback on initial script load
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         unlockAudioContext();
     } else {

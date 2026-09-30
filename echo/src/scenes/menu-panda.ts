@@ -11,56 +11,61 @@ export function createMenuPanda(): HTMLElement {
     button.setAttribute('aria-label', t('menu.pandaPoke'));
     button.title = t('menu.pandaPoke');
 
-    function video(src: string): HTMLVideoElement {
-        const element = document.createElement('video');
+    function image(src: string): HTMLImageElement {
+        const element = document.createElement('img');
         element.src = src;
-        element.muted = true;
-        element.playsInline = true;
-        element.preload = 'auto';
+        element.alt = '';
+        element.draggable = false;
         element.setAttribute('aria-hidden', 'true');
-        element.disablePictureInPicture = true;
-        element.tabIndex = -1;
         return element;
     }
 
-    const idle = video('/mascots/panda-idle-v1.mp4');
-    idle.loop = true;
-    const reaction = video('/mascots/panda-poke-v1.mp4');
+    const idleAnimation = '/mascots/panda-idle-v4.gif';
+    const idleStill = '/mascots/panda-idle-still-v4.png';
+    const reactionAnimation = '/mascots/panda-poke-v4.gif';
+    const reactionStill = '/mascots/panda-poke-still-v4.png';
+    const reactionDuration = 9990;
+    const idle = image(idleAnimation);
+    const reaction = image(reactionStill);
     reaction.hidden = true;
     let reacting = false;
+    let reactionTimer: ReturnType<typeof setTimeout> | undefined;
+    let reactionSequence = 0;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     function syncPlayback(): void {
-        if (current() !== 'menu' || document.hidden) {
-            idle.pause();
-            reaction.pause();
-            return;
-        }
-        const active = reacting ? reaction : idle;
-        (reacting ? idle : reaction).pause();
-        if (!reacting && reducedMotion.matches) { idle.pause(); return; }
-        void active.play().catch(() => {
-            if (active === reaction && reacting && !document.hidden && current() === 'menu') rest();
-        });
+        const visible = current() === 'menu' && !document.hidden;
+        if (!visible && reacting) rest();
+        const src = visible && !reacting && !reducedMotion.matches ? idleAnimation : idleStill;
+        if (idle.getAttribute('src') !== src) idle.src = src;
+        if (reacting && reducedMotion.matches) reaction.src = reactionStill;
     }
 
     function rest(): void {
+        clearTimeout(reactionTimer);
+        reactionTimer = undefined;
         reacting = false;
         reaction.hidden = true;
+        reaction.src = reactionStill;
         idle.hidden = false;
         button.classList.remove('is-reacting');
         syncPlayback();
     }
 
     button.onclick = () => {
+        clearTimeout(reactionTimer);
         reacting = true;
         idle.hidden = true;
         reaction.hidden = false;
-        reaction.currentTime = 0;
+        reaction.src = reducedMotion.matches ? reactionStill : `${reactionAnimation}?play=${++reactionSequence}`;
         button.classList.add('is-reacting');
         syncPlayback();
     };
-    reaction.addEventListener('ended', rest);
+    reaction.addEventListener('load', () => {
+        if (!reacting) return;
+        clearTimeout(reactionTimer);
+        reactionTimer = setTimeout(rest, reducedMotion.matches ? 500 : reactionDuration);
+    });
     reaction.addEventListener('error', rest);
     onChange(scene => {
         if (scene !== 'menu') rest();
@@ -68,6 +73,7 @@ export function createMenuPanda(): HTMLElement {
     });
     document.addEventListener('visibilitychange', syncPlayback);
     reducedMotion.addEventListener('change', syncPlayback);
+    syncPlayback();
 
     const caption = document.createElement('span');
     caption.className = 'menu-panda-caption';

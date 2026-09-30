@@ -11,8 +11,6 @@ test('Canvas text uses ctx.scale(-1, 1)', () => {
 
 test('CSS flips canvas horizontally via the toggleable .mirrored class and webcam is hidden', () => {
     const cssCode = fs.readFileSync(path.join(process.cwd(), 'src/style.css'), 'utf8');
-    // The "mirror" setting (settings.ts) toggles this class on #game-canvas at runtime
-    // instead of a hardcoded transform, so the user can turn mirroring off.
     assert.match(cssCode, /#game-canvas\.mirrored\s*{[^}]*transform:\s*scaleX\(-1\)/, 'style.css should flip canvas horizontally when .mirrored is applied');
     assert.match(cssCode, /#webcam\s*{[^}]*display:\s*none/, 'style.css should hide webcam');
 
@@ -28,13 +26,12 @@ test('Free-movement mechanics are intact (x, y float coordinates)', () => {
         fillText: () => {}
     };
     
-    // Create landmarks that simulate a pinch near the man
     const handLandmarks = [
-        {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, // 0-3
-        {x: man.x + 0.01, y: man.y + 0.01}, // 4 (thumb tip)
-        {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, // 5-7
-        {x: man.x + 0.01, y: man.y + 0.01}, // 8 (index tip)
-        ...Array.from({ length: 12 }, () => ({ x: 0, y: 0 })), // remaining joints
+        {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0},
+        {x: man.x + 0.01, y: man.y + 0.01},
+        {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0},
+        {x: man.x + 0.01, y: man.y + 0.01},
+        ...Array.from({ length: 12 }, () => ({ x: 0, y: 0 })),
     ];
     
     const initialManX = man.x;
@@ -49,12 +46,11 @@ test('Free-movement mechanics are intact (x, y float coordinates)', () => {
 
 test('Gravity works (entities fall to floor_y = 0.8)', () => {
     resetLevel();
-    man.y = 0.5; // Set man in the air
+    man.y = 0.5;
     man.grabbedBy = null;
     
     evaluateRules();
     
-    // Gravity logic in game.ts: man.y = Math.min(floor_y, man.y + 0.02);
     assert.strictEqual(Math.round(man.y * 100) / 100, 0.52, 'Man should fall by 0.02');
     
     man.y = 0.79;

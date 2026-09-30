@@ -1,8 +1,3 @@
-// Level Select scene: 3 level cards + Tutorial entry point.
-// Also owns the small "go to level / go to tutorial / restart" helpers that
-// used to live behind the old #level-switcher <select>, so both this scene
-// and the in-game pause panel can reuse them without a circular import on
-// main.ts.
 
 import { LEVELS, getLevelConfig } from '../levels';
 import type { Difficulty } from '../../../shared/score';
@@ -10,6 +5,7 @@ import { api } from '../api';
 import { gameState, resetLevel } from '../game';
 import { t } from '../i18n';
 import { show, onChange } from './router';
+import { touchDevice } from '../device';
 
 const container = document.getElementById('scene-levels');
 
@@ -30,11 +26,10 @@ function setHtml(id: string, html: string): void {
     if (el) el.innerHTML = html;
 }
 
-// --- Shared level/tutorial entry helpers (also used by scenes/pause.ts) ---
-
 export function applyIdleHud(levelIndex: number): void {
     const config = getLevelConfig(levelIndex, gameState.difficulty);
-    setText('level-title', `${config?.title || ''} · ${t(`difficulty.${gameState.difficulty}`)}`);
+    setText('level-title', touchDevice ? `${String(levelIndex).padStart(2, '0')} · ${levelName(levelIndex)}`
+        : `${config?.title || ''} · ${t(`difficulty.${gameState.difficulty}`)}`);
     const actions = document.getElementById('round-actions');
     if (actions) actions.hidden = false;
     const modeIndicator = document.getElementById('mode-indicator');
@@ -94,8 +89,6 @@ export function goToTutorial(): void {
     show('game');
 }
 
-// --- Scene rendering ---
-
 let sessionInfo: { best: Record<string, number> } | null = null;
 
 async function loadSession(): Promise<void> {
@@ -123,7 +116,7 @@ function render(): void {
 
     const heading = document.createElement('h2');
     heading.className = 'levels-heading';
-    heading.textContent = t('levels.title');
+    heading.textContent = `2D · ${t('levels.title')}`;
 
     const grid = document.createElement('div');
     grid.className = 'levels-grid';
@@ -152,7 +145,7 @@ function render(): void {
         for (const difficulty of ['easy', 'hard'] as const) {
             const option = document.createElement('div');
             option.className = 'difficulty-option';
-            const play = button(t(`levels.${difficulty}`), () => goToLevel(n, difficulty));
+            const play = button(t(`${touchDevice ? 'mobile' : 'levels'}.${difficulty}`), () => goToLevel(n, difficulty));
             option.append(play);
             card.append(option);
         }
@@ -163,14 +156,14 @@ function render(): void {
     const nav = document.createElement('div');
     nav.className = 'levels-nav';
     nav.append(
-        button(t('levels.back'), () => show('menu')),
+        button(t('levels.back'), () => show(touchDevice ? 'menu' : 'modes')),
         button(t('levels.tutorial'), () => goToTutorial())
     );
 
     const help = document.createElement('div');
     help.className = 'levels-help';
     const difficulty = document.createElement('p');
-    difficulty.textContent = t('levels.difficultySummary');
+    difficulty.textContent = t(touchDevice ? 'mobile.difficultySummary' : 'levels.difficultySummary');
     const hint = document.createElement('p');
     hint.textContent = t('levels.difficultyHint');
     help.append(difficulty, hint);

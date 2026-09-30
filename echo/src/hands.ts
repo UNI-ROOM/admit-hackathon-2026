@@ -17,12 +17,26 @@ export function snapshotHands(hands: [HandLandmarks | null, HandLandmarks | null
 
 export function recordedHands(frame: import('./types').EchoFrame): [HandLandmarks | null, HandLandmarks | null] {
     if (!frame) return [null, null];
-    // Accept original one-hand frames as well as new two-hand recordings.
     return Array.isArray(frame) ? [frame, null] : frame.hands;
 }
 
-// Detection order can change between frames. Keep two persistent identities
-// using handedness, with wrist distance as a fallback when labels are uncertain.
+export function echoFrameAt(frames: import('./types').EchoFrame[], elapsedMs: number, durationMs: number) {
+    if (!frames.length) return null;
+    const timeAt = (index: number) => {
+        const frame = frames[index];
+        return frame && !Array.isArray(frame) && frame.timeMs !== undefined
+            ? frame.timeMs : index / frames.length * durationMs;
+    };
+    if (elapsedMs < timeAt(0)) return null;
+    let low = 0, high = frames.length - 1;
+    while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (timeAt(middle) <= elapsedMs) low = middle;
+        else high = middle - 1;
+    }
+    return frames[low];
+}
+
 export class LiveHandTracker {
     private slots: ({ hand: HandLandmarks; label?: string } | null)[] = [null, null];
 
@@ -57,9 +71,6 @@ export class LiveHandTracker {
     }
 }
 
-// Keep detections separate from the animation clock. Only pinched hands survive
-// a brief occlusion; a deliberate open hand releases immediately. Expiry also
-// covers a stalled camera rather than only explicit empty detection results.
 export const HAND_LOSS_GRACE_MS = 180;
 type BufferedHand = {
     target: HandLandmarks;
@@ -103,14 +114,11 @@ export class HandInputBuffer {
             const target = { x: (slot.target[4].x + slot.target[8].x) / 2, y: (slot.target[4].y + slot.target[8].y) / 2 };
             const distance = Math.hypot(target.x - slot.position.x, target.y - slot.position.y);
             const elapsed = Math.max(0, now - slot.sampledAt);
-            // Suppress small tremors, with a shorter lag on intentional motion.
             const alpha = 1 - Math.exp(-elapsed / (distance > 0.025 ? 12 : 35));
             slot.position.x += (target.x - slot.position.x) * alpha;
             slot.position.y += (target.y - slot.position.y) * alpha;
             slot.sampledAt = now;
             const dx = slot.position.x - target.x, dy = slot.position.y - target.y;
-            // Translate the whole hand equally: smoothing must not deform the
-            // thumb/index separation or synthesize a different gesture.
             return slot.target.map(point => ({ ...point, x: point.x + dx, y: point.y + dy }));
         }) as [HandLandmarks | null, HandLandmarks | null];
     }

@@ -1,4 +1,3 @@
-// Load tracking after the menu renders. Pin the JS and WASM versions together.
 export const HANDS_ASSETS = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/';
 const pending = new Map<string, Promise<void>>();
 function loadScript(src: string): Promise<void> {

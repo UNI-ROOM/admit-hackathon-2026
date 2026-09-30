@@ -1,6 +1,3 @@
-// Camera helpers for the Settings panel (permission status, device listing,
-// requesting access). Kept dependency-free from the rest of the game so the
-// Settings UI can use these without pulling in main.ts.
 
 export type CameraPermissionState = 'granted' | 'denied' | 'prompt' | 'unknown';
 
@@ -16,7 +13,6 @@ export async function cameraPermissionState(): Promise<CameraPermissionState> {
         }
         return 'unknown';
     } catch {
-        // Firefox (and some browsers) throw for unsupported permission names.
         return 'unknown';
     }
 }

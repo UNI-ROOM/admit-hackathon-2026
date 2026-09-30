@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Minimal fake DOM: one button that covers the whole screen.
 function fakeElement() {
     const classes = new Set<string>();
     return {
@@ -21,7 +20,6 @@ let now = 0;
 Date.now = () => now;
 const { handlePointer, setUiContext } = await import('../src/ui/pointer');
 
-// Open hand (not pointing): every fingertip above its middle joint, thumb away.
 function openHand(tipX = 0.5, thumbOnMiddle = false, thumbOnIndex = false) {
     const h = Array.from({ length: 21 }, () => ({ x: tipX, y: 0.5 }));
     h[0] = { x: tipX, y: 0.8 }; h[9] = { x: tipX, y: 0.6 };

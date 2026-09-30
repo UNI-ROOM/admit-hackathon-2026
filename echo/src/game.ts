@@ -63,8 +63,6 @@ export let tutorialBox: TutorialBox = { x: 0.3, y: 0.5, grabbedBy: null };
 export let tutorialTarget: TutorialTarget = { x: 0.7, y: 0.5, radius: 0.1 };
 
 export let laser: Laser | null = null;
-// Shelters stay at the level's entrance and levers, never follow the player.
-// Rendering and collision share the same shortened beam height.
 export let laserSafeZones: { x: number; y: number; width: number; height: number }[] = [];
 export let plate: Plate | null = null;
 export let crystal: Crystal | null = null;
@@ -74,8 +72,6 @@ export let deathBanner: { text: string; until: number } = { text: '', until: 0 }
 
 type ReplayObject = 'man' | 'plate' | 'prism' | `lever_${number}`;
 
-// Attach actual grabs to the recording itself. Replacing/clearing recordings
-// also clears their reservations, while rewinding the same loop preserves them.
 const recordedObjects = new WeakMap<GameState['recordedEchoes'][number], Map<ReplayObject, string>>();
 
 function reservedBy(objectId: ReplayObject): string | null {
@@ -93,8 +89,6 @@ function canGrab(object: Entity, objectId: ReplayObject, agentId: string): boole
     const owner = reservedBy(objectId);
     if (owner && owner !== agentId) return false;
 
-    // A replay may only pick up objects actually grabbed during its recording.
-    // This also prevents a nearby clone from taking the live player's object.
     const ghostIndex = /^ghost_(\d+)(?:_(1))?$/.exec(agentId);
     const objects = ghostIndex ? recordedObjects.get(gameState.recordedEchoes[Number(ghostIndex[1])]) : undefined;
     if (objects) return objects.get(objectId) === (ghostIndex![2] ? 'live_1' : 'live');
@@ -105,9 +99,6 @@ function canGrab(object: Entity, objectId: ReplayObject, agentId: string): boole
     return true;
 }
 
-// A recording reserves an object for its clone only after a deliberate grab:
-// held for 0.5 s (30 fixed 60 Hz steps) or dragged 5% of the screen.
-// A brief accidental pinch while passing by leaves the object free.
 export const RESERVE_HOLD_STEPS = 30;
 export const RESERVE_MOVE = 0.05;
 const pendingGrabs = new Map<string, { objectId: ReplayObject; steps: number; x: number; y: number }>();
@@ -179,8 +170,6 @@ export function playingTimeLeft(now = Date.now()): number {
     return Math.max(0, gameState.RECORD_DURATION * (1 - gameState.currentFrame / maxFrames));
 }
 
-// Informational helper count; the door only checks physical puzzle conditions.
-// Both hands of one clone count as one past self.
 export function activeEchoCount(): number {
     const owners = [prism?.grabbedBy, plate?.grabbedBy, ...levers.map(object => object.grabbedBy)];
     return new Set(owners.flatMap(owner => {
@@ -189,7 +178,6 @@ export function activeEchoCount(): number {
     })).size;
 }
 
-// --- Particle System ---
 export interface Particle {
     x: number;
     y: number;
@@ -333,8 +321,6 @@ export function triggerManDeath(message: string = t('death.default')) {
 
 export function resetLevel({ preserveProgress = false }: { preserveProgress?: boolean } = {}) {
     pendingGrabs.clear();
-    // Recording transitions start a new loop, while completed hard-mode goals persist.
-    // Retries and level changes use the default full reset.
     const keepProgress = preserveProgress && gameState.difficulty === 'hard';
     const completedLevers = keepProgress ? levers.map(object => object.active) : [];
     const chargedCrystal = keepProgress && !!crystal?.charged;
@@ -405,50 +391,79 @@ export function resetLevel({ preserveProgress = false }: { preserveProgress?: bo
     deathBanner = { text: '', until: 0 };
 }
 
+const pandaMotion = new WeakMap<Man, { x: number; time: number; lean: number }>();
+
 export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, m: Man) {
-    const pxX = m.x * canvasWidth;
-    const pxY = m.y * canvasHeight;
-    const size = 30;
-
-    ctx.beginPath();
-    ctx.arc(pxX, pxY - size, size/2, 0, Math.PI * 2);
-    ctx.fillStyle = m.color;
-    ctx.fill();
-    
-    ctx.beginPath();
-    ctx.moveTo(pxX, pxY - size/2); 
-    ctx.lineTo(pxX, pxY + size);
-    ctx.moveTo(pxX - size/1.5, pxY); 
-    ctx.lineTo(pxX + size/1.5, pxY);
-    ctx.moveTo(pxX, pxY + size); 
-    ctx.lineTo(pxX - size/1.5, pxY + size*1.5);
-    ctx.moveTo(pxX, pxY + size);
-    ctx.lineTo(pxX + size/1.5, pxY + size*1.5);
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = m.color;
-    ctx.stroke();
-
-    if (m.grabbedBy) {
+    const now = performance.now();
+    const phase = now / 1000;
+    const previous = pandaMotion.get(m);
+    const elapsed = previous ? Math.max(16, now - previous.time) : 16;
+    const velocity = previous ? (m.x - previous.x) * canvasWidth / elapsed : 0;
+    const lean = (previous?.lean ?? 0) + (Math.max(-0.25, Math.min(0.25, velocity * 0.2)) - (previous?.lean ?? 0)) * 0.18;
+    pandaMotion.set(m, { x: m.x, time: now, lean });
+    const held = !!m.grabbedBy;
+    const falling = !held && m.y < 0.79;
+    const bob = Math.sin(phase * (held ? 7 : 2.8)) * (held ? 2 : 1.5);
+    const breath = Math.sin(phase * 2.8) * 0.018;
+    const blink = phase % 4.3 > 4.12;
+    const pawSwing = Math.sin(phase * (held || falling ? 9 : 2.8)) * (held || falling ? 0.28 : 0.06);
+    ctx.save();
+    ctx.translate(m.x * canvasWidth, m.y * canvasHeight);
+    if (held) {
         ctx.beginPath();
-        ctx.arc(pxX, pxY, size*2.5, 0, Math.PI * 2);
-        ctx.fillStyle = getAgentAlphaColor(m.grabbedBy);
+        ctx.arc(0, 0, 75, 0, Math.PI * 2);
+        ctx.fillStyle = getAgentAlphaColor(m.grabbedBy!);
         ctx.fill();
     }
+    const oval = (x: number, y: number, rx: number, ry: number, color: string, rotation = 0) => {
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx, ry, rotation, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+    };
+    if (!held && !falling) oval(0, 45, 26, 5, 'rgba(0, 0, 0, 0.25)');
+    ctx.translate(0, bob);
+    ctx.rotate(lean);
+    ctx.scale(1 + breath, 1 - breath);
+    const dark = '#222633';
+    oval(-15, 32, 11, 14, dark, -pawSwing);
+    oval(15, 32, 11, 14, dark, pawSwing);
+    oval(0, 10, 27, 30, dark);
+    oval(0, 15, 21, 24, '#f5f3eb');
+    oval(-27, held || falling ? -2 : 8, 10, 19, dark, (held || falling ? -0.9 : -0.22) + pawSwing);
+    oval(27, held || falling ? -2 : 8, 10, 19, dark, (held || falling ? 0.9 : 0.22) - pawSwing);
+    oval(-22, -40, 12, 13, dark, -0.2);
+    oval(22, -40, 12, 13, dark, 0.2);
+    oval(-22, -40, 6, 7, '#454551');
+    oval(22, -40, 6, 7, '#454551');
+    oval(0, -22, 32, 28, '#fffdf5');
+    oval(-12, -24, 10, 13, dark, 0.35);
+    oval(12, -24, 10, 13, dark, -0.35);
+    oval(-11, -24, 4, blink ? 0.8 : 5, '#fffdf5');
+    oval(11, -24, 4, blink ? 0.8 : 5, '#fffdf5');
+    if (!blink) {
+        oval(-10, -23, 2.4, 3.3, '#171b26');
+        oval(10, -23, 2.4, 3.3, '#171b26');
+        oval(-9, -25, 1.1, 1.4, '#ffffff');
+        oval(11, -25, 1.1, 1.4, '#ffffff');
+    }
+    oval(-22, -11, 5, 3, '#f3b9b5');
+    oval(22, -11, 5, 3, '#f3b9b5');
+    oval(0, -12, 5.5, 3.8, dark);
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(0, -5);
+    ctx.moveTo(-7, -6);
+    ctx.quadraticCurveTo(0, 2, 7, -6);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = dark;
+    ctx.stroke();
+    if (held) oval(0, -1, 3, 2, '#eb9caa');
+    ctx.restore();
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
-    // Make the safe entrance and lever positions visible without extra text.
-    ctx.save();
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.06)';
-    ctx.strokeStyle = 'rgba(52, 211, 153, 0.45)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
-    for (const zone of laserSafeZones) {
-        ctx.fillRect(zone.x * canvasWidth, zone.y * canvasHeight, zone.width * canvasWidth, zone.height * canvasHeight);
-        ctx.strokeRect(zone.x * canvasWidth, zone.y * canvasHeight, zone.width * canvasWidth, zone.height * canvasHeight);
-    }
-    ctx.restore();
-    // Lever
     for (const [index, lever] of levers.entries()) {
         const lvx = lever.x * canvasWidth;
         const lvyTop = lever.y * canvasHeight;
@@ -476,7 +491,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         drawUnmirroredText(ctx, t('canvas.lever') + (levers.length > 1 ? ` ${index + 1}` : ''), lvx, lvyTop - 20, '24px sans-serif', 'white');
     }
 
-    // Door
     const doorW = door.width * canvasWidth;
     const doorH = door.height * canvasHeight;
     const doorX = door.x * canvasWidth - doorW/2;
@@ -492,7 +506,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     drawUnmirroredText(ctx, t('canvas.echoCount', { active: activeEchoCount() }),
         doorX + doorW/2, doorY + doorH + 24, 'bold 16px sans-serif', '#06b6d4');
 
-    // Laser (Vertical beam)
     if (laser && laser.active) {
         const lx = laser.x * canvasWidth;
         const ly = laser.y * canvasHeight;
@@ -518,7 +531,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.restore();
     }
 
-    // Reflected Laser (Horizontal beam)
     if (reflectedLaser.active) {
         const sx = reflectedLaser.startX * canvasWidth;
         const sy = reflectedLaser.startY * canvasHeight;
@@ -546,30 +558,54 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.restore();
     }
 
-    // Plate (Shield)
     if (plate) {
         const px = plate.x * canvasWidth;
         const py = plate.y * canvasHeight;
         const pw = plate.width * canvasWidth;
         const ph = plate.height * canvasHeight;
         
-        ctx.fillStyle = plate.grabbedBy ? getAgentColor(plate.grabbedBy) : '#0284c7';
-        ctx.fillRect(px - pw/2, py - ph/2, pw, ph);
-        ctx.strokeStyle = plate.grabbedBy ? getAgentColor(plate.grabbedBy) : '#bae6fd';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(px - pw/2, py - ph/2, pw, ph);
-        
+        ctx.save();
         if (plate.grabbedBy) {
             ctx.beginPath();
             ctx.arc(px, py, pw * 0.7, 0, Math.PI * 2);
             ctx.fillStyle = getAgentAlphaColor(plate.grabbedBy);
             ctx.fill();
         }
-
+        const stalkHeight = Math.min(ph, 22);
+        const stalk = ctx.createLinearGradient(0, py - stalkHeight/2, 0, py + stalkHeight/2);
+        stalk.addColorStop(0, '#c2ed80');
+        stalk.addColorStop(0.35, '#86c94b');
+        stalk.addColorStop(1, '#397b32');
+        ctx.beginPath();
+        ctx.roundRect(px - pw/2, py - stalkHeight/2, pw, stalkHeight, stalkHeight/2);
+        ctx.fillStyle = stalk;
+        ctx.fill();
+        ctx.strokeStyle = '#285b2d';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        for (let i = 1; i < 4; i++) {
+            const jointX = px - pw/2 + pw * i/4;
+            ctx.fillStyle = '#d4efa0';
+            ctx.fillRect(jointX - 2, py - stalkHeight/2, 4, stalkHeight);
+            ctx.fillStyle = '#477e35';
+            ctx.fillRect(jointX + 2, py - stalkHeight/2, 1.5, stalkHeight);
+        }
+        const leafX = px + pw/4;
+        ctx.strokeStyle = '#79b84a';
+        ctx.beginPath();
+        ctx.moveTo(leafX, py);
+        ctx.quadraticCurveTo(leafX + 9, py - 12, leafX + 20, py - 17);
+        ctx.stroke();
+        ctx.fillStyle = '#91ce57';
+        for (const [offset, angle] of [[8, -0.9], [18, -0.3]]) {
+            ctx.beginPath();
+            ctx.ellipse(leafX + offset, py - 13, 12, 3.5, angle, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
         drawUnmirroredText(ctx, t('canvas.shield'), px, py - ph/2 - 10, '16px sans-serif', 'white');
     }
 
-    // Prism
     if (prism) {
         const px = prism.x * canvasWidth;
         const py = prism.y * canvasHeight;
@@ -602,7 +638,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Diagonal reflective glint
         ctx.beginPath();
         if (prism.direction === 'left') {
             ctx.moveTo(px + pw * 0.25, py - ph * 0.25);
@@ -626,7 +661,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         drawUnmirroredText(ctx, t('canvas.prism'), px, py - ph / 2 - 12, 'bold 16px sans-serif', '#38bdf8');
     }
 
-    // Crystal
     if (crystal) {
         const hoverOffset = Math.sin(Date.now() * 0.003) * 0.012;
         const cyNorm = (crystal.baseY ?? crystal.y) + hoverOffset;
@@ -637,7 +671,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
 
         ctx.save();
 
-        // Pulsating glow and expanding energy rings when charged / charging
         if (crystal.charge > 0) {
             const pulse = (Math.sin(Date.now() * 0.008) + 1) * 0.5;
             const ringRadius = cw * (0.6 + pulse * 0.3 * crystal.charge);
@@ -651,7 +684,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.shadowBlur = 15 + 20 * crystal.charge;
         }
 
-        // Progress ring
         const progressRadius = Math.max(cw, ch) * 0.65;
         ctx.beginPath();
         ctx.arc(cx, cy, progressRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * crystal.charge);
@@ -659,14 +691,12 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.lineWidth = 4;
         ctx.stroke();
 
-        // Faceted Diamond Gemstone
         const top = { x: cx, y: cy - ch / 2 };
         const right = { x: cx + cw / 2, y: cy };
         const bottom = { x: cx, y: cy + ch / 2 };
         const left = { x: cx - cw / 2, y: cy };
         const center = { x: cx, y: cy - ch * 0.08 };
 
-        // Facet 1: Top-Left
         ctx.beginPath();
         ctx.moveTo(top.x, top.y);
         ctx.lineTo(left.x, left.y);
@@ -678,7 +708,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Facet 2: Top-Right
         ctx.beginPath();
         ctx.moveTo(top.x, top.y);
         ctx.lineTo(right.x, right.y);
@@ -690,7 +719,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Facet 3: Bottom-Left
         ctx.beginPath();
         ctx.moveTo(bottom.x, bottom.y);
         ctx.lineTo(left.x, left.y);
@@ -702,7 +730,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Facet 4: Bottom-Right
         ctx.beginPath();
         ctx.moveTo(bottom.x, bottom.y);
         ctx.lineTo(right.x, right.y);
@@ -720,10 +747,8 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         drawUnmirroredText(ctx, `${Math.round(crystal.charge * 100)}%`, cx, cy + ch / 2 + 24, 'bold 16px sans-serif', crystal.charged ? '#4ade80' : '#38bdf8');
     }
 
-    // Man
     drawMan(ctx, canvasWidth, canvasHeight, man);
 
-    // Show why an otherwise free object cannot be picked up in this loop.
     const replayObjects: [ReplayObject, Entity | null][] = [
         ['man', man], ['plate', plate], ['prism', prism],
         ...levers.map((object, index): [ReplayObject, Entity] => [`lever_${index}`, object]),
@@ -736,7 +761,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         }
     }
 
-    // Death banner
     if (deathBanner.text && Date.now() < deathBanner.until) {
         ctx.save();
         const bw = 560;
@@ -752,10 +776,8 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         ctx.restore();
     }
 
-    // Particles VFX
     updateAndDrawParticles(ctx, canvasWidth, canvasHeight);
 
-    // Confetti on win
     if (gameState.mode === 'WON') {
         spawnConfetti(canvasWidth, canvasHeight);
     }
@@ -790,8 +812,6 @@ export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: nu
     if (pinch) {
         let grabbedAnything = wasHolding;
 
-        // Grab the nearest object in reach, not the first in a fixed order:
-        // the shield lying next to the man must not pick up the man instead.
         if (!grabbedAnything) {
             const toBox = (o: { x: number; y: number; width: number; height: number }) =>
                 Math.hypot(Math.max(0, Math.abs(px - o.x) - o.width / 2), Math.max(0, Math.abs(py - o.y) - o.height / 2));
@@ -963,7 +983,6 @@ export function handleTutorialDrag(ctx: CanvasRenderingContext2D, canvasWidth: n
 }
 
 export function evaluateRules() {
-    // Gravity logic
     const floor_y = 0.8;
     if (!man.grabbedBy) {
         if (man.y < floor_y) man.y = Math.min(floor_y, man.y + 0.02);
@@ -984,7 +1003,6 @@ export function evaluateRules() {
         else if (prism.y > floor_y) prism.y = floor_y;
     }
 
-    // Hard-mode levers lock down once completed, freeing both hands for rescue.
     const latchLevers = getActiveLevel().latchLevers;
     for (const lever of levers) {
         const wasActive = lever.active;
@@ -1002,7 +1020,6 @@ export function evaluateRules() {
         }
     }
     
-    // Laser logic
     if (laser) {
         if (laser.active && laser.minX !== undefined && laser.maxX !== undefined) {
             let t = 0;
@@ -1023,16 +1040,14 @@ export function evaluateRules() {
             laser.x = midX + Math.sin(t * speed) * amp;
         }
 
-        laser.height = 1.0 - laser.y; // Default goes to bottom
+        laser.height = 1.0 - laser.y;
 
-        // Clip before fixed shelters, accounting for the full beam width.
         for (const zone of laserSafeZones) {
             if (laser.x + laser.width / 2 >= zone.x && laser.x - laser.width / 2 <= zone.x + zone.width) {
                 laser.height = Math.min(laser.height, Math.max(0, zone.y - laser.y));
             }
         }
         
-        // Deflection by Shield (Plate)
         if (plate) {
             if (plate.x - plate.width/2 < laser.x + laser.width/2 && 
                 plate.x + plate.width/2 > laser.x - laser.width/2) {
@@ -1046,7 +1061,6 @@ export function evaluateRules() {
             }
         }
 
-        // Deflection by Prism
         let hitPrism = false;
         if (prism && laser.active) {
             if (Math.abs(laser.x - prism.x) < prism.width / 2 && prism.y > laser.y) {
@@ -1124,17 +1138,12 @@ export function evaluateRules() {
         }
     }
 
-    // Physical puzzle conditions apply equally to live and recorded hands.
     door.open = levers.every(l => l.active) && (!crystal || crystal.charged);
 
-    // Hazard collision & Death mechanics
     let manHitByLaser = false;
     if (laser && laser.active) {
-        // Hitbox matches the drawn figure (arms reach ±20 px at 1280 wide).
         const hitW = 0.025;
         const hitH = 0.1;
-        // Standing under the shield protects the man even when the beam
-        // grazes just past its edge.
         const shielded = !!plate && plate.y < man.y && Math.abs(man.x - plate.x) <= plate.width / 2;
         if (!shielded && Math.abs(man.x - laser.x) < laser.width/2 + hitW) {
             if (man.y > laser.y && man.y - hitH < laser.y + laser.height) {
@@ -1156,7 +1165,6 @@ export function evaluateRules() {
         triggerManDeath();
     }
 
-    // Win condition
     if (door.open) {
         if (Math.abs(man.x - door.x) < door.width/2 && Math.abs(man.y - door.y) < door.height/2) {
             if (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING') {

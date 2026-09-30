@@ -1,21 +1,12 @@
-// Hand cursor for the whole interface: the index fingertip moves a cursor over
-// buttons. Two ways to click: touch thumb to middle finger (instant, the index
-// finger stays on target), or hold the cursor on a button for 1 s (dwell, as
-// taught in the tutorial). Mouse input keeps working alongside it.
 import { isPointing, isThumbMiddleTouch } from '../utils';
 import { getSettings } from '../settings';
 import type { HandLandmarks } from '../hands';
 
 const DWELL_MS = 1000;
 const CLICK_COOLDOWN_MS = 600;
-// Camera edges are hard to reach with a hand, so the inner 80% of the frame
-// already covers the whole screen.
 const EDGE = 0.1;
 const SMOOTHING = 0.45;
-// A shaky hand briefly slipping off a button edge must not restart the dwell.
 const TARGET_GRACE_MS = 200;
-// After a click, dwell re-arms only once the cursor moves this far, so holding
-// still on a button (or a toggle that re-renders) doesn't click it again.
 const REARM_DISTANCE_PX = 40;
 
 const CLICKABLE = 'button, select, [data-dwell]';
@@ -36,10 +27,6 @@ let wasTouching = false;
 let lastClick = 0;
 let dialogsOnTop = -1;
 
-// Outside gameplay the cursor follows any visible hand and dwell works with any
-// hand pose — open, pinched or thumb on middle finger. While objects are being
-// grabbed it needs pointing or the thumb–middle touch, so grabbing never clicks
-// the HUD.
 let uiContext = () => true;
 export function setUiContext(fn: () => boolean): void { uiContext = fn; }
 
@@ -49,8 +36,6 @@ function show(visible: boolean): void {
     if (usePopover) visible ? cursor.showPopover() : cursor.hidePopover();
 }
 
-// Modal dialogs live in the browser's top layer; re-open the cursor popover
-// whenever the set of open dialogs changes so it stays above them.
 function keepOnTop(): void {
     const open = document.querySelectorAll('dialog[open]').length;
     if (!usePopover || open === dialogsOnTop || cursor.hidden) return;
@@ -70,8 +55,6 @@ function setTarget(el: HTMLElement | null, now: number): void {
 
 function updateTarget(el: HTMLElement | null, now: number): void {
     if (el === target) { pending = null; return; }
-    // Switch at once onto a first target or away from a removed one; otherwise
-    // only after the cursor has stayed off the current target for a moment.
     if (!target || !target.isConnected) { setTarget(el, now); return; }
     if (!pending || pending.el !== el) pending = { el, since: now };
     if (now - pending.since >= TARGET_GRACE_MS) setTarget(el, now);
@@ -82,7 +65,6 @@ function activate(el: HTMLElement, now: number): void {
     dwellStart = now;
     if (pos) dwellLock = { ...pos };
     if (el instanceof HTMLSelectElement) {
-        // Native dropdowns can't be driven by a synthetic click: cycle options.
         el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
         el.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
@@ -128,8 +110,6 @@ export function handlePointer(hands: (HandLandmarks | null)[]): void {
     }
 
     const cooling = now - lastClick < CLICK_COOLDOWN_MS;
-    // Holding a pinch or touch on a button selects it too: a touch that started
-    // off-target still clicks once the cursor has rested on a button for 1 s.
     const canDwell = (ui || pointing || touching) && !dwellLock && !cooling;
     let progress = 0;
     if (touching && !wasTouching && !cooling) {

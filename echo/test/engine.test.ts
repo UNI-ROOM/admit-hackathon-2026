@@ -23,8 +23,8 @@ import {
 
 function createMockLandmarks(fingerTipsY: [number, number, number, number], jointsY: [number, number, number, number], thumbPos = { x: 0.1, y: 0.1 }, indexPos?: { x: number, y: number }) {
     const pts = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
-    pts[0] = { x: 0.5, y: 0.7, z: 0 }; // Wrist
-    pts[4] = { x: thumbPos.x, y: thumbPos.y, z: 0 }; // Thumb tip
+    pts[0] = { x: 0.5, y: 0.7, z: 0 };
+    pts[4] = { x: thumbPos.x, y: thumbPos.y, z: 0 };
 
     const tips = [8, 12, 16, 20];
     const joints = [6, 10, 14, 18];
@@ -43,19 +43,16 @@ function createMockLandmarks(fingerTipsY: [number, number, number, number], join
 describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
 
     test('1. Gesture: isOpenPalm returns true when 4 fingers extended above joints', () => {
-        // Tips are higher (lower y) than joints
         const openHand = createMockLandmarks([0.2, 0.2, 0.2, 0.2], [0.4, 0.4, 0.4, 0.4]);
         assert.equal(isOpenPalm(openHand), true);
     });
 
     test('2. Gesture: isOpenPalm returns false when any finger is curled', () => {
-        // Index finger curled down (tip y 0.5 > joint y 0.4)
         const curledHand = createMockLandmarks([0.5, 0.2, 0.2, 0.2], [0.4, 0.4, 0.4, 0.4]);
         assert.equal(isOpenPalm(curledHand), false);
     });
 
     test('3. Gesture: isFist returns true when all 4 fingertips are lower than joints', () => {
-        // Tips are lower (higher y) than joints
         const fistHand = createMockLandmarks([0.6, 0.6, 0.6, 0.6], [0.4, 0.4, 0.4, 0.4]);
         assert.equal(isFist(fistHand), true);
     });
@@ -66,30 +63,28 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
     });
 
     test('5. Gesture: isPinching detects active pinch within 0.08 normalized distance', () => {
-        // Thumb at (0.5, 0.5), index at (0.53, 0.5) => distance 0.03 < 0.08
         const pinchHand = createMockLandmarks([0.5, 0.5, 0.5, 0.5], [0.4, 0.4, 0.4, 0.4], { x: 0.5, y: 0.5 }, { x: 0.53, y: 0.5 });
         assert.equal(isPinching(pinchHand), true);
     });
 
     test('6. Gesture: isPinching rejects when thumb and index finger are far apart', () => {
-        // Thumb at (0.2, 0.2), index at (0.6, 0.6) => distance ~0.56 > 0.08
         const separateHand = createMockLandmarks([0.6, 0.6, 0.6, 0.6], [0.4, 0.4, 0.4, 0.4], { x: 0.2, y: 0.2 }, { x: 0.6, y: 0.6 });
         assert.equal(isPinching(separateHand), false);
     });
 
     test('7. StateStabilizer: filters jitter and only transitions after required frame threshold', () => {
         const stabilizer = new StateStabilizer(3, 'IDLE');
-        assert.equal(stabilizer.update('RECORDING'), 'IDLE'); // 1 frame
-        assert.equal(stabilizer.update('RECORDING'), 'IDLE'); // 2 frames
-        assert.equal(stabilizer.update('RECORDING'), 'RECORDING'); // 3 frames: transitions!
+        assert.equal(stabilizer.update('RECORDING'), 'IDLE');
+        assert.equal(stabilizer.update('RECORDING'), 'IDLE');
+        assert.equal(stabilizer.update('RECORDING'), 'RECORDING');
     });
 
     test('8. StateStabilizer: resets counter if intermittent jitter disrupts candidate sequence', () => {
         const stabilizer = new StateStabilizer(3, 'IDLE');
-        stabilizer.update('RECORDING'); // 1
-        stabilizer.update('RECORDING'); // 2
-        stabilizer.update('IDLE');      // Jitter reset!
-        assert.equal(stabilizer.update('RECORDING'), 'IDLE'); // Re-starts from 1
+        stabilizer.update('RECORDING');
+        stabilizer.update('RECORDING');
+        stabilizer.update('IDLE');
+        assert.equal(stabilizer.update('RECORDING'), 'IDLE');
         assert.equal(stabilizer.currentStableValue, 'IDLE');
     });
 
@@ -107,21 +102,20 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
     });
 
     test('10. Multi-Agent Identity: maps ghost and player IDs to distinct thematic colors & names', () => {
-        assert.equal(getAgentColor('ghost_0'), '#06b6d4'); // Cyan
-        assert.equal(getAgentColor('ghost_1'), '#a855f7'); // Purple
-        assert.equal(getAgentColor('live'), '#f97316');    // Amber / Live
+        assert.equal(getAgentColor('ghost_0'), '#06b6d4');
+        assert.equal(getAgentColor('ghost_1'), '#a855f7');
+        assert.equal(getAgentColor('live'), '#f97316');
         assert.equal(getAgentName('ghost_0'), 'Clone 1');
         assert.equal(getAgentName('ghost_1'), 'Clone 2');
         assert.equal(getAgentName('live'), 'You');
     });
 
     test('11. Particle Engine: spawns sparks within bounded capacity without memory leaks', () => {
-        particles.length = 0; // Clear
+        particles.length = 0;
         spawnSparks(0.5, 0.5, 20, '#f59e0b');
         assert.equal(particles.length, 20);
         assert.ok(particles[0].vx !== undefined && particles[0].alpha === 1.0);
 
-        // Spawn excessive particles to test ceiling capping (250)
         for (let i = 0; i < 300; i++) {
             spawnSparks(0.5, 0.5, 5);
         }
@@ -134,7 +128,6 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         assert.ok(laser !== null);
         assert.ok(plate !== null);
 
-        // Make laser static for deterministic alignment
         laser!.minX = undefined;
         laser!.maxX = undefined;
         laser!.x = 0.5;
@@ -144,7 +137,6 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         plate!.y = 0.5;
 
         evaluateRules();
-        // Laser height should be clamped at plate top
         const expectedHeight = (plate!.y - plate!.height / 2) - laser!.y;
         assert.ok(Math.abs(laser!.height - expectedHeight) < 0.001);
     });
@@ -156,7 +148,6 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         assert.ok(crystal !== null);
         assert.ok(laser !== null);
 
-        // Place prism intercepting laser
         prism!.x = laser!.x;
         prism!.y = 0.45;
         crystal!.y = 0.45;
@@ -174,12 +165,10 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         resetLevel();
         assert.ok(lever !== null);
 
-        // Initially inactive lever => door locked
         lever.active = false;
         evaluateRules();
         assert.equal(door.open, false);
 
-        // Pull lever down => door unlocks
         for (const [index, object] of levers.entries()) { object.handleY = object.y + 0.2; object.grabbedBy = `ghost_${index}`; }
         evaluateRules();
         assert.equal(lever.active, true);
@@ -187,7 +176,6 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
     });
 
     test('15. Gesture: isPointing returns true when index finger is extended and others are curled', () => {
-        // Index tip (0.2) above its joint (0.4); middle/ring/pinky tips (0.6) below their joints (0.4)
         const pointingHand = createMockLandmarks([0.2, 0.6, 0.6, 0.6], [0.4, 0.4, 0.4, 0.4]);
         assert.equal(isPointing(pointingHand), true);
     });

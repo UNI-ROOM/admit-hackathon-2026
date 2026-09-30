@@ -39,7 +39,6 @@ test('wrist distance preserves identity when handedness is absent or uncertain',
     assert.deepEqual(tracker.update({ multiHandLandmarks: [movedSecond], multiHandedness: [{ label: 'Left', score: 0.51 }] }), [null, movedSecond]);
 });
 
-
 test('two-hand snapshots keep both identities, null slots and immutable past positions', () => {
     const first = hand(0.2, 0.5), second = hand(0.8, 0.5);
     const frame = snapshotHands([first, second]);
@@ -155,7 +154,6 @@ test('score timer uses playback progress of the full two-hand recording', () => 
     gameState.currentFrame = 150;
     assert.equal(playingTimeLeft(), 7500);
 });
-
 
 test('easy uses the original one-hand puzzles and ignores a simultaneous second hand', () => {
     const first = hand(.2, .5), second = hand(.8, .5);

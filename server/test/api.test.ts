@@ -128,7 +128,6 @@ test('invalid SQLite import rolls back every table',async t=>{
  assert.equal((await db.one('SELECT COUNT(*)::integer n FROM users'))!.n,0);
 });
 
-
 test('difficulty is validated, persisted and selects the matching echo bonus', async t => {
  const s=await setup(t); const c=s.client(); await c('/session');
  const run={levelId:3,timeLeftMs:5000,echoesUsed:1,deaths:0,resets:0};

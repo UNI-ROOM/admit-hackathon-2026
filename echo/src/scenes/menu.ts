@@ -1,5 +1,3 @@
-// Main menu scene: title, START / PROFILE / LEADERBOARD / SETTINGS, and a
-// bottom status line (camera permission, hand-tracking status).
 
 import { t } from '../i18n';
 import { show } from './router';
@@ -7,28 +5,24 @@ import { cameraPermissionState } from '../camera';
 import { openProfile, openLeaderboard, accountBadge } from '../ui/account';
 import { openSettings } from './settings';
 import { createMenuPanda } from './menu-panda';
+import { touchDevice } from '../device';
 
 const container = document.getElementById('scene-menu');
 
 let handStatus: 'waiting' | 'loading' | 'ready' = 'waiting';
 let statusOverride: string | null = null;
 
-// Called by main.ts once the hand-tracking model returns its first result.
 export function setHandStatus(status: 'loading' | 'ready'): void {
     handStatus = status;
     void updateStatusLine();
 }
 
-// Called by main.ts once the camera stream is running; the hand model is
-// then loading until its first result arrives.
 export function setCameraStarted(): void {
     statusOverride = null;
     if (handStatus === 'waiting') handStatus = 'loading';
     void updateStatusLine();
 }
 
-// Called by main.ts if the camera fails to start (e.g. permission denied),
-// so the user sees why they were sent back to the menu.
 export function setStatusMessage(message: string): void {
     statusOverride = message;
     void updateStatusLine();
@@ -44,8 +38,6 @@ function button(text: string, action: () => void, extraClass = ''): HTMLButtonEl
     return b;
 }
 
-// Builds a "<dot> label" segment for the status line, dot colour reflecting
-// state (ok / muted / danger) without altering the underlying t() text.
 function statusSegment(dotState: 'ok' | 'muted' | 'danger', text: string): HTMLSpanElement {
     const seg = document.createElement('span');
     seg.className = 'status-segment';
@@ -59,6 +51,7 @@ async function updateStatusLine(): Promise<void> {
     const status = document.getElementById('menu-status-line');
     if (!status) return;
     status.replaceChildren();
+    if (touchDevice) { status.append(statusSegment('ok', t('mobile.ready'))); return; }
     if (statusOverride) {
         status.append(statusSegment('danger', statusOverride));
         return;
@@ -102,13 +95,13 @@ function render(): void {
     h2.textContent = 'ECHO GAME';
     const tagline = document.createElement('p');
     tagline.className = 'menu-tagline';
-    tagline.textContent = t('menu.tagline');
+    tagline.textContent = t(touchDevice ? 'mobile.tagline' : 'menu.tagline');
     titleWrap.append(h1, h2, tagline, accountBadge());
 
     const buttons = document.createElement('div');
     buttons.className = 'menu-buttons';
     buttons.append(
-        button(t('menu.start'), () => show('levels'), 'menu-btn--primary'),
+        button(t(touchDevice ? 'mobile.start' : 'menu.start'), () => show(touchDevice ? 'levels' : 'modes'), 'menu-btn--primary'),
         button(t('menu.profile'), () => openProfile()),
         button(t('menu.leaderboard'), () => openLeaderboard()),
         button(t('menu.settings'), () => openSettings())
@@ -116,7 +109,7 @@ function render(): void {
 
     const hint = document.createElement('p');
     hint.className = 'menu-hand-hint';
-    hint.textContent = t('menu.handHint');
+    hint.textContent = t(touchDevice ? 'mobile.menuHint' : 'menu.handHint');
 
     const status = document.createElement('div');
     status.className = 'menu-status';
@@ -127,8 +120,6 @@ function render(): void {
 }
 
 render();
-// Keep the status line fresh (camera permission can change any time the
-// player is looking at the menu, e.g. after granting access in another tab).
 setInterval(() => {
     if (container && !container.hidden) void updateStatusLine();
 }, 2000);

@@ -1,0 +1,120 @@
+
+.touch-device { --mobile-panel: #111a29; --mobile-line: #28364c; }
+.touch-device body { background: #0b101b; -webkit-tap-highlight-color: transparent; }
+.touch-device button, .touch-device select { touch-action: manipulation; }
+.touch-device .scene {
+    background-color: #0b101b;
+    background-size: 40px 40px, 40px 40px, 100% 100%;
+    padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+    overscroll-behavior: contain;
+}
+.touch-device .scene::after { animation: none; opacity: .2; }
+.touch-device .menu-scene { gap: 20px; justify-content: flex-start; }
+.touch-device .menu-badge { position: static; max-width: none; display: flex; gap: 12px; align-items: center; text-align: left; align-self: flex-start; margin: 0; }
+.touch-device .menu-badge img { width: 36px; height: 36px; border-radius: 8px; image-rendering: auto; }
+.touch-device .menu-badge p { max-width: 175px; margin: 0; font-size: 11px; }
+.touch-device .menu-title-wrap { margin-top: 16px; }
+.touch-device .menu-title { font-size: clamp(22px, 7vw, 36px); letter-spacing: 1px; }
+.touch-device .menu-subtitle { font-size: 12px; letter-spacing: 2px; margin-top: 14px; color: #a5c6ff; }
+.touch-device .menu-tagline { max-width: 290px; font: 14px/1.6 system-ui; margin-top: 18px; color: #aebbd0; }
+.touch-device .menu-buttons { width: min(100%, 420px); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.touch-device .menu-buttons .menu-btn--primary { grid-column: 1 / -1; min-height: 56px; }
+.touch-device .menu-buttons .menu-btn:last-child { grid-column: 1 / -1; }
+.touch-device .menu-btn, .touch-device .account-panel button {
+    min-width: 0; min-height: 48px; font: 600 14px/1.4 system-ui;
+    letter-spacing: .02em; padding: 13px 16px; border-width: 1px;
+    border-color: var(--mobile-line); border-radius: 12px; background: var(--mobile-panel);
+}
+.touch-device .menu-btn--primary { background: #3564ef; border-color: #6088ff; box-shadow: 0 8px 28px #244fc327; }
+.touch-device .menu-panda { position: static; width: 120px; margin: -8px 0; gap: 0; }
+.touch-device .menu-panda-caption { font-size: 11px; }
+.touch-device .menu-hand-hint { max-width: 330px; margin: 0; font: 12px/1.6 system-ui; color: #aebbd0; }
+.touch-device .menu-status { position: static; padding: 0; font: 11px/1.5 system-ui; }
+.touch-device .levels-scene { gap: 20px; justify-content: flex-start; }
+.touch-device .levels-heading { font: 700 22px/1.3 system-ui; letter-spacing: -.02em; color: #f1f5ff; align-self: flex-start; }
+.touch-device .levels-grid { grid-template-columns: 1fr; width: min(100%, 480px); gap: 12px; }
+.touch-device .level-card { background: var(--mobile-panel); border-color: var(--mobile-line); border-radius: 16px; padding: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+.touch-device .level-card-num { font: 600 12px/1.2 ui-monospace, monospace; color: #9cbcff; }
+.touch-device .level-card-name { grid-column: 1 / -1; font: 650 20px/1.3 system-ui; }
+.touch-device .level-card-best { grid-column: 2; grid-row: 1; text-align: right; font-size: 12px; }
+.touch-device .difficulty-option .menu-btn { font: 600 13px/1.4 system-ui; letter-spacing: 0; padding: 12px 8px; background: #18273e; }
+.touch-device .difficulty-option:last-child .menu-btn { background: #241f32; }
+.touch-device .level-card-lock { font-size: 20px; }
+.touch-device .levels-help { font: 12px/1.6 system-ui; text-align: left; width: min(100%, 480px); }
+.touch-device .levels-nav { display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 480px); gap: 10px; }
+.touch-device .account-hud { display: none; }
+.touch-device .account-panel { width: calc(100% - 24px); max-width: 480px; max-height: calc(100dvh - 40px); padding: 20px; border-radius: 18px; border-color: var(--mobile-line); background: #0e1726; box-sizing: border-box; overscroll-behavior: contain; }
+.touch-device .account-panel h2 { font: 700 22px/1.3 system-ui; margin-bottom: 18px; overflow-wrap: anywhere; }
+.touch-device .account-panel button { margin: 4px 4px 4px 0; }
+.touch-device .account-panel form { display: grid; grid-template-columns: minmax(0, 1fr); }
+.touch-device .account-panel input, .touch-device .settings-panel select { min-width: 0; max-width: 100%; min-height: 44px; font-size: 16px; border-radius: 8px; }
+.touch-device .account-panel table { font-size: 12px; table-layout: fixed; width: 100%; }
+.touch-device .account-panel td, .touch-device .account-panel th { overflow-wrap: anywhere; padding: 8px 4px; }
+.touch-device .settings-panel .row { grid-template-columns: minmax(0, 1fr) minmax(0, auto); font-size: 14px; }
+.touch-device #game-container:not([hidden]) {
+    position: fixed; inset: 0; width: 100%; height: 100dvh;
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px;
+    background: #0b101b; box-sizing: border-box;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+        max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.touch-device #game-container[hidden] { display: none; }
+.touch-device #ui-layer { display: contents; }
+.touch-device .game-header {
+    grid-row: 1; position: relative; z-index: 20; display: flex; align-items: center; gap: 10px;
+    padding: 12px; box-sizing: border-box; background: var(--mobile-panel); border: 1px solid var(--mobile-line); border-radius: 14px;
+}
+.touch-device .game-header > .status-box:first-child { display: grid; grid-template-columns: 1fr auto; text-align: left; gap: 4px 10px; flex: 1; min-width: 0; }
+.touch-device .status-box { background: transparent; border: 0; padding: 0; border-radius: 0; box-shadow: none; }
+.touch-device .hud-title { font: 700 10px/1.3 system-ui; letter-spacing: .1em; color: #8fa5c8; }
+.touch-device #level-title { grid-column: 1; font: 650 13px/1.4 system-ui; color: #eef3ff; margin: 0; text-transform: none; letter-spacing: 0; }
+.touch-device #hud-menu-button { grid-column: 2; grid-row: 1 / 3; margin: 0; }
+.touch-device .hud-menu-btn { min-width: 44px; min-height: 44px; margin: 0; padding: 10px 12px; font: 600 12px/1.3 system-ui; letter-spacing: 0; border: 1px solid var(--mobile-line); border-radius: 10px; background: #19273d; }
+.touch-device #mode-indicator { padding: 0; min-width: 0; align-self: center; font: 700 11px/1.5 ui-monospace, monospace; width: 78px; flex-shrink: 0; color: #a9c7ff; overflow-wrap: anywhere; }
+.touch-device #canvas-stage {
+    position: relative; inset: auto; grid-row: 2; min-width: 0; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.touch-device #game-canvas { position: relative; inset: auto; flex-shrink: 0; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: 14px;
+    background: radial-gradient(ellipse at 50% 25%, #12233a, #0d1523 75%); outline: 1px solid var(--mobile-line); }
+.touch-device .game-footer { grid-row: 3; position: relative; z-index: 20; width: 100%; margin: 0; text-align: left; padding: 14px; border: 1px solid var(--mobile-line); border-radius: 14px; background: var(--mobile-panel); box-sizing: border-box; }
+.touch-device #touch-progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.touch-device #touch-goal { font: 600 13px/1.4 system-ui; color: #dce7fa; }
+.touch-device #touch-puzzle-status { font: 700 11px/1.4 ui-monospace, monospace; color: #a9c7ff; white-space: nowrap; }
+.touch-device #touch-puzzle-status.is-complete { color: #86efc3; }
+.touch-device .instruction-box { display: block; padding: 0; margin: 8px 0 12px; font: 13px/1.5 system-ui; background: none; color: #aebbd0; border: 0; }
+.touch-device .round-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.touch-device .round-actions[hidden] { display: none; }
+.touch-device #play-button { background: #3564ef; border-color: #6088ff; color: #fff; }
+.touch-device #record-button { background: #2b2031; border-color: #764457; color: #ffd0da; }
+.touch-device #touch-tools { display: flex; gap: 8px; }
+.touch-device #touch-tools button { flex: 1; }
+.touch-device #touch-tools button[hidden] { display: none; }
+@media (orientation: landscape) and (max-height: 600px) {
+    .touch-device #game-container:not([hidden]) { grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
+    .touch-device .game-header { grid-column: 1; grid-row: 1; padding: 8px 12px; }
+    .touch-device #canvas-stage { grid-column: 1; grid-row: 2; }
+    .touch-device .game-footer { grid-column: 2; grid-row: 1 / 3; align-self: center; padding: 14px; }
+    .touch-device #touch-progress { align-items: flex-start; }
+    .touch-device .instruction-box { font-size: 12px; }
+    .touch-device .menu-scene { display: grid; grid-template-columns: 1fr 1fr; align-content: start; column-gap: 30px; }
+    .touch-device .menu-title-wrap { grid-column: 1; grid-row: 2; margin: 0; }
+    .touch-device .menu-badge { grid-column: 1; }
+    .touch-device .menu-buttons { grid-column: 2; grid-row: 1 / 4; }
+    .touch-device .menu-panda { display: none; }
+    .touch-device .menu-hand-hint { grid-column: 1; grid-row: 3; }
+    .touch-device .menu-status { grid-column: 1 / -1; }
+}
+@media (max-width: 350px) {
+    .touch-device .scene { padding-left: 14px; padding-right: 14px; }
+    .touch-device .game-header { padding: 8px; gap: 6px; }
+    .touch-device #mode-indicator { width: 64px; font-size: 10px; }
+    .touch-device .hud-menu-btn { padding: 10px 8px; }
+    .touch-device .game-footer { padding: 10px; }
+    .touch-device .instruction-box { font-size: 12px; }
+}
+@media (max-width: 600px) {
+    .account-panel { box-sizing: border-box; max-width: calc(100% - 24px); }
+    .levels-nav .menu-btn { min-width: 0; }
+}

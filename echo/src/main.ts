@@ -1,6 +1,7 @@
 import { initializeAccount, requireSignIn, showResult, closePanel, panelOpen } from './ui/account';
 import { handlePointer, setUiContext } from './ui/pointer';
 import './style.css';
+import './mobile.css';
 import { FixedStepClock, FRAME_MS } from './loop';
 import { loadTrackingRuntime, HANDS_ASSETS } from './tracking-runtime';
 import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } from './utils';
@@ -14,13 +15,19 @@ import { LEVELS, getLevelConfig } from './levels';
 import type { EchoFrame } from './types';
 import { playSfx, unlockAudioContext } from './audio';
 import { t } from './i18n';
-import { LiveHandTracker, HandInputBuffer, snapshotHands, recordedHands, playableHands, type HandResults } from './hands';
+import { LiveHandTracker, HandInputBuffer, snapshotHands, recordedHands, playableHands, echoFrameAt, type HandResults } from './hands';
 import { getSettings, subscribe as subscribeSettings } from './settings';
 import { show, current, onEnterGame, onChange } from './scenes/router';
+import type { RobotHands2D } from './robot-hands-2d';
+import { get3DDifficulty } from './scenes/modes';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
 import { setHandStatus, setStatusMessage, setCameraStarted } from './scenes/menu';
-import { isPaused } from './scenes/pause';
+import { isPaused, openPause } from './scenes/pause';
+import { touchDevice } from './device';
+import { TouchController, type TouchHands } from './touch';
+import { syncTouchHud } from './mobile-hud';
 import './scenes/menu';
+import { setIntroContinue } from './scenes/intro';
 import './scenes/levels';
 import './scenes/pause';
 
@@ -36,6 +43,9 @@ const canvasCtx = canvasElement.getContext('2d')!;
 const modeIndicator = document.getElementById('mode-indicator')!;
 const instruction = document.getElementById('instruction')!;
 let wonTimeout: any = null;
+const canvasStage = document.getElementById('canvas-stage')!;
+const worldWidth = () => touchDevice ? 600 : canvasElement.width;
+const worldHeight = () => touchDevice ? 600 : canvasElement.height;
 
 function getIdleInstruction(level: number): string {
     const config = getLevelConfig(level, gameState.difficulty);
@@ -43,23 +53,31 @@ function getIdleInstruction(level: number): string {
 }
 
 function resizeCanvas() {
+    if (touchDevice) {
+        const bounds = canvasStage.getBoundingClientRect();
+        const size = Math.max(1, Math.floor(Math.min(bounds.width, bounds.height)));
+        canvasElement.style.width = `${size}px`;
+        canvasElement.style.height = `${size}px`;
+        const resolution = Math.round(size * Math.min(window.devicePixelRatio || 1, 2));
+        if (canvasElement.width !== resolution) canvasElement.width = resolution;
+        if (canvasElement.height !== resolution) canvasElement.height = resolution;
+        return;
+    }
     const scale = Math.min(1, 1920 / window.innerWidth, 1080 / window.innerHeight);
     canvasElement.width = Math.round(window.innerWidth * scale);
     canvasElement.height = Math.round(window.innerHeight * scale);
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+if (touchDevice) new ResizeObserver(resizeCanvas).observe(canvasStage);
 
-// Mirror setting: toggles a CSS class on the canvas instead of a hardcoded transform.
 function applyMirrorSetting() {
-    canvasElement.classList.toggle('mirrored', getSettings().mirror);
+    if (touchDevice) canvasElement.classList.remove('mirrored');
+    else canvasElement.classList.toggle('mirrored', getSettings().mirror);
 }
 applyMirrorSetting();
 subscribeSettings(() => applyMirrorSetting());
 
-// Hold a fist for 0.7 s to reset the loop (counted in fixed 60 Hz simulation steps).
-// A frame where tracking briefly misses the fist only drains the progress a
-// little instead of restarting it from zero.
 const FIST_HOLD_STEPS = Math.round(700 / FRAME_MS);
 let fistProgress = 0;
 function updateFist(fist: boolean): boolean {
@@ -82,13 +100,35 @@ function writeClass(element: HTMLElement, value: string): void {
     if (element.className !== value) element.className = value;
 }
 
+let robotHands2D: RobotHands2D | null = null;
+if (import.meta.env.DEV) (window as unknown as { __echo2DHands: () => ReturnType<RobotHands2D['metrics']> | null }).__echo2DHands = () => robotHands2D?.metrics() ?? null;
+let robotHandsLoading = false, robotHandsUnavailable = false, robotHandsGeneration = 0;
+function loadRobotHands2D() {
+    if (robotHands2D || robotHandsLoading || robotHandsUnavailable || touchDevice || !getSettings().showSkeleton || current() !== 'game') return;
+    robotHandsLoading = true;
+    const generation = robotHandsGeneration;
+    void import('./robot-hands-2d').then(({ RobotHands2D }) => {
+        if (generation !== robotHandsGeneration || current() !== 'game') return;
+        robotHands2D = new RobotHands2D();
+    }).catch(() => { if (generation === robotHandsGeneration) robotHandsUnavailable = true; })
+        .finally(() => { if (generation === robotHandsGeneration) robotHandsLoading = false; });
+}
+onChange(() => {
+    robotHandsGeneration++; robotHandsLoading = false;
+    robotHands2D?.dispose(); robotHands2D = null;
+    loadRobotHands2D();
+});
+
 function replayFrame(frame: EchoFrame | undefined, echoIndex: number, render: boolean): void {
     for (const [handIndex, hand] of recordedHands(frame || null).entries()) {
         const agentId = `ghost_${echoIndex}${handIndex ? '_1' : ''}`;
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, hand, agentId, render);
-        if (render && hand && getSettings().showSkeleton) {
-            drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: getAgentColor(agentId), lineWidth: 4});
-            drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 4});
+        handleDragAndDrop(canvasCtx, worldWidth(), worldHeight(), hand, agentId, render);
+        if (render && !touchDevice && hand && getSettings().showSkeleton) {
+            if (robotHands2D) robotHands2D.add(hand, agentId, getAgentColor(agentId), true, isPinching(hand));
+            else {
+                drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: getAgentColor(agentId), lineWidth: 4});
+                drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 4});
+            }
         }
     }
 }
@@ -100,8 +140,60 @@ const playButton = document.getElementById('play-button');
 if (recordButton) { recordButton.textContent = t('round.record'); recordButton.onclick = () => startRound('record'); }
 if (playButton) { playButton.textContent = t('round.play'); playButton.onclick = () => startRound('play'); }
 
+const touch = touchDevice ? new TouchController(canvasElement, {
+    enabled: () => current() === 'game' && !isPaused() && !document.querySelector('dialog[open]')
+        && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING'
+            || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 2)),
+    slots: () => gameState.mode !== 'TUTORIAL' && gameState.difficulty === 'hard' ? 2 : 1,
+    targets: () => gameState.mode === 'TUTORIAL' ? [tutorialBox] : [
+        man, ...levers.filter(object => !object.grabbedBy).map(object => ({ x: object.x, y: object.handleY })),
+        ...(plate && !plate.grabbedBy ? [plate] : []), ...(prism && !prism.grabbedBy ? [prism] : []),
+    ].filter(object => !('grabbedBy' in object) || !object.grabbedBy),
+    release: slot => {
+        handleDragAndDrop(canvasCtx, worldWidth(), worldHeight(), null, slot ? 'live_1' : 'live');
+        if (gameState.mode === 'TUTORIAL') tutorialBox.grabbedBy = null;
+    },
+    activate: unlockAudioContext,
+}) : null;
+
+if (touchDevice) {
+    for (const id of ['touch-tools', 'touch-progress']) document.getElementById(id)!.hidden = false;
+    const restart = document.getElementById('touch-restart-button') as HTMLButtonElement;
+    restart.textContent = t('mobile.restart');
+    restart.onclick = () => { touch?.reset(); restartCurrentLevel(); syncTouchHud(); };
+    const tutorialButton = document.getElementById('touch-tutorial-button') as HTMLButtonElement;
+    tutorialButton.onclick = () => {
+        unlockAudioContext();
+        if (gameState.mode !== 'TUTORIAL') return;
+        if (gameState.tutorialStep === 4) { openPause(); return; }
+        if (gameState.tutorialStep === 1 || gameState.tutorialStep === 3) gameState.tutorialStep++;
+        syncTouchHud();
+    };
+    onChange(() => { touch?.reset(); resizeCanvas(); syncTouchHud(); });
+    new MutationObserver(() => {
+        if (document.querySelector('dialog[open]')) touch?.reset();
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    document.addEventListener('visibilitychange', () => {
+        touch?.reset();
+        if (document.hidden && current() === 'game' && gameState.mode !== 'WON') openPause(false);
+    });
+    window.addEventListener('blur', () => touch?.reset());
+    let lastTouchFrame = 0;
+    const animateTouch = (now: number) => {
+        if (current() === 'game' && !document.hidden && now - lastTouchFrame >= 1000 / 30) {
+            lastTouchFrame = now - (now - lastTouchFrame) % (1000 / 30);
+            onResults({}, touch!.hands);
+        }
+        requestAnimationFrame(animateTouch);
+    };
+    requestAnimationFrame(animateTouch);
+    document.addEventListener('pointerdown', unlockAudioContext, { once: true });
+}
+
 function startRound(action: 'record' | 'play'): void {
     if (current() !== 'game' || gameState.mode !== 'IDLE' || isPaused() || panelOpen()) return;
+    unlockAudioContext();
+    touch?.reset();
     if (wonTimeout) clearTimeout(wonTimeout);
     wonTimeout = null;
     gameState.wonTimeoutSet = false;
@@ -123,10 +215,11 @@ function startRound(action: 'record' | 'play'): void {
     if (roundActions) roundActions.hidden = true;
 }
 
-function onResults(results: HandResults) {
-    handInput.update(handTracker.update(results), Date.now());
+function onResults(results: HandResults, touchHands?: TouchHands) {
+    if (touchDevice && !touchHands) return;
+    handInput.update(touchHands ?? handTracker.update(results), Date.now());
     if (detectionFailed) { detectionFailed = false; setCameraStarted(); }
-    if (!handModelReady) {
+    if (!touchDevice && !handModelReady) {
         handModelReady = true;
         setHandStatus('ready');
     }
@@ -134,38 +227,49 @@ function onResults(results: HandResults) {
 
 function processFrame(render: boolean) {
     const now = Date.now();
-    const visible = playableHands(handInput.visible(now), gameState.difficulty);
+    const difficulty = current() === 'game3d' ? get3DDifficulty() : gameState.difficulty;
+    const visible = playableHands(handInput.visible(now), difficulty);
     const trackedHands = handInput.read(now);
-    const liveHands = playableHands(trackedHands, gameState.difficulty);
+    const liveHands = playableHands(trackedHands, difficulty);
     latestHandCount = visible.filter(Boolean).length;
     const liveHand = liveHands[0] || liveHands[1];
     const liveAgent = liveHands[0] ? 'live' : 'live_1';
     const twoHands = visible.every(Boolean);
-    // Menus use actual visible hands; occlusion grace only protects gameplay.
-    if (render) handlePointer(visible);
+    const pointerHands = current() === 'game3d' ? visible.map(hand => {
+        if (!hand) return null;
+        const palm = Math.hypot(hand[0].x - hand[9].x, hand[0].y - hand[9].y);
+        const pinch = Math.hypot(hand[8].x - hand[4].x, hand[8].y - hand[4].y);
+        return pinch / Math.max(.06, palm) < .62 ? null : hand;
+    }) : visible;
+    if (render && !touchDevice) handlePointer(pointerHands);
 
-    // While the menu/level-select scenes are showing, the camera may still be
-    // running in the background (we don't stop it on scene switch), but the
-    // game loop must not mutate gameState or draw on the canvas.
+    if (current() === 'game3d') {
+        window.dispatchEvent(new CustomEvent('echo:hands', { detail: liveHands }));
+        return;
+    }
+
     if (current() !== 'game') {
-        // Additional scenes can use stabilized input without changing the 2D
-        // difficulty rules or starting another camera/model instance.
         if (render) window.dispatchEvent(new CustomEvent('echo:hands', { detail: trackedHands }));
         return;
     }
 
     if (roundActions) roundActions.hidden = gameState.mode !== 'IDLE';
+    syncTouchHud();
     canvasCtx.save();
-    if (render) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    canvasCtx.setTransform(canvasElement.width / worldWidth(), 0, 0, canvasElement.height / worldHeight(), 0, 0);
+    if (render) {
+        canvasCtx.clearRect(0, 0, worldWidth(), worldHeight());
+        loadRobotHands2D(); robotHands2D?.begin(worldWidth(), worldHeight());
+    }
 
     if (gameState.mode === 'WON') {
-        if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
+        if (render) drawWorld(canvasCtx, worldWidth(), worldHeight());
         canvasCtx.restore();
         writeText(modeIndicator, t('mode.success'));
         writeClass(modeIndicator, "status-box text-2xl font-bold text-green-400 playing");
         writeHtml(instruction, t('win.instructionMulti'));
+        syncTouchHud();
 
-        // Reset after 8 seconds
         if (!gameState['wonTimeoutSet']) {
             gameState['wonTimeoutSet'] = true;
             playSfx('win');
@@ -173,11 +277,9 @@ function processFrame(render: boolean) {
                 if (wonTimeout) clearTimeout(wonTimeout);
                 wonTimeout = null;
                 gameState['wonTimeoutSet'] = false;
-                // The player may have already navigated to Level Select/Menu (via
-                // pause) before the 8s auto-advance fired — don't clobber whatever
-                // level they're looking at now.
                 if (current() !== 'game') return;
                 closePanel();
+                if (touchDevice && gameState.currentLevel === LEVELS.length) { show('levels'); return; }
                 gameState.deaths = 0; gameState.resets = 0; gameState.attemptStart = 0;
                 gameState.currentLevel = Math.min(gameState.currentLevel + 1, LEVELS.length);
                 gameState.mode = 'IDLE';
@@ -193,17 +295,16 @@ function processFrame(render: boolean) {
                 gameState['wonTimeoutSet'] = false;
                 restartCurrentLevel();
             };
-            wonTimeout = setTimeout(nextLevel, 8000);
+            if (!touchDevice) wonTimeout = setTimeout(nextLevel, 8000);
             void showResult({ levelId: gameState.currentLevel, timeLeftMs: playingTimeLeft(), echoesUsed: gameState.winEchoesUsed, difficulty: gameState.difficulty, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
         }
         return;
     }
 
-    if (panelOpen() || isPaused()) { if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height); canvasCtx.restore(); return; }
+    if (document.querySelector('dialog[open]') || isPaused()) { if (render) drawWorld(canvasCtx, worldWidth(), worldHeight()); canvasCtx.restore(); return; }
 
-    // Either hand can make the reset fist.
     const fistHand = liveHands.find(hand => hand && isFist(hand)) || null;
-    if (liveHand && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING' || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 3))) {
+    if (!touchDevice && liveHand && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING' || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 3))) {
         if (updateFist(!!fistHand)) {
             fistProgress = 0;
 
@@ -230,8 +331,8 @@ function processFrame(render: boolean) {
 
         if (render && fistHand && fistProgress > 0) {
             const wrist = fistHand[0];
-            const px = wrist.x * canvasElement.width;
-            const py = wrist.y * canvasElement.height;
+            const px = wrist.x * worldWidth();
+            const py = wrist.y * worldHeight();
             const progress = fistProgress / FIST_HOLD_STEPS;
 
             canvasCtx.beginPath();
@@ -249,13 +350,13 @@ function processFrame(render: boolean) {
 
     if (gameState.mode === 'TUTORIAL') {
         if (gameState.tutorialStep === 1) {
-            if (liveHand && isOpenPalm(liveHand)) {
+            if (!touchDevice && liveHand && isOpenPalm(liveHand)) {
                 gameState.tutorialStep = 2;
                 gameState.baseInstruction = t('tutorial.step2.instruction');
                 writeText(modeIndicator, t('tutorial.step2.indicator'));
             }
         } else if (gameState.tutorialStep === 2) {
-            handleTutorialDrag(canvasCtx, canvasElement.width, canvasElement.height, liveHand, render);
+            handleTutorialDrag(canvasCtx, worldWidth(), worldHeight(), liveHand, render);
             if (!tutorialBox.grabbedBy) {
                 const dist = Math.sqrt(Math.pow(tutorialBox.x - tutorialTarget.x, 2) + Math.pow(tutorialBox.y - tutorialTarget.y, 2));
                 if (dist < tutorialTarget.radius) {
@@ -266,7 +367,7 @@ function processFrame(render: boolean) {
             }
         }
     } else if (gameState.mode === 'IDLE') {
-        if (liveHands.some(hand => hand && isOpenPalm(hand))) {
+        if (!touchDevice && liveHands.some(hand => hand && isOpenPalm(hand))) {
             startRound('record');
         }
     }
@@ -315,27 +416,33 @@ function processFrame(render: boolean) {
                 gameState.recordedEchoes[gameState.echoIndex] = [];
             }
             const recordedHand = snapshotHands(liveHands);
-            gameState.recordedEchoes[gameState.echoIndex].push(recordedHand);
+            gameState.recordedEchoes[gameState.echoIndex].push(touchDevice
+                ? { ...recordedHand, timeMs: now - gameState.recordStartTime } : recordedHand);
             gameState.frames = gameState.recordedEchoes[0];
 
             const currentRecFrame = gameState.recordedEchoes[gameState.echoIndex].length - 1;
             for (let i = 0; i < gameState.echoIndex; i++) {
                 const echo = gameState.recordedEchoes[i];
-                replayFrame(echo?.[Math.min(currentRecFrame, echo.length - 1)], i, render);
+                replayFrame(touchDevice ? echoFrameAt(echo, now - gameState.recordStartTime, gameState.RECORD_DURATION)
+                    : echo?.[Math.min(currentRecFrame, echo.length - 1)], i, render);
             }
         }
     }
     else if (gameState.mode === 'PLAYING') {
         const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
+        if (touchDevice && !gameState.livePlay) {
+            gameState.currentFrame = Math.floor((now - gameState.playStartTime) / gameState.RECORD_DURATION * maxFrames);
+        }
 
         for (let i = 0; i < gameState.recordedEchoes.length; i++) {
             const echo = gameState.recordedEchoes[i];
-            replayFrame(echo?.[gameState.currentFrame], i, render);
+            replayFrame(touchDevice ? echoFrameAt(echo, now - gameState.playStartTime, gameState.RECORD_DURATION)
+                : echo?.[gameState.currentFrame], i, render);
         }
 
         if (gameState.livePlay) {
             writeText(modeIndicator, t('playing.liveTick', { time: Math.ceil(playingTimeLeft(now) / 1000) }));
-        } else {
+        } else if (!touchDevice) {
             gameState.currentFrame++;
         }
         if (gameState.livePlay ? playingTimeLeft(now) <= 0 : gameState.currentFrame >= maxFrames) {
@@ -350,13 +457,13 @@ function processFrame(render: boolean) {
         }
     }
 
-    if (gameState.mode !== 'IDLE') {
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[0], 'live', render);
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[1], 'live_1', render);
+    if (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') {
+        handleDragAndDrop(canvasCtx, worldWidth(), worldHeight(), liveHands[0], 'live', render);
+        handleDragAndDrop(canvasCtx, worldWidth(), worldHeight(), liveHands[1], 'live_1', render);
     }
 
     let currentHint = "";
-    if (liveHand) {
+    if (!touchDevice && liveHand) {
         if (gameState.mode === 'TUTORIAL') {
             if (liveHand[0].y > 0.8) {
                 currentHint = t('hint.raiseHandTutorial');
@@ -434,23 +541,29 @@ function processFrame(render: boolean) {
     for (const [index, hand] of liveHands.entries()) if (render && hand) {
         const isPinch = isPinching(hand);
         const color = getAgentColor(index === 0 ? 'live' : 'live_1');
-        if (getSettings().showSkeleton) {
-            drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: isPinch ? '#facc15' : color, lineWidth: 5});
-            drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 5});
+        if (!touchDevice && getSettings().showSkeleton) {
+            if (robotHands2D) robotHands2D.add(hand, index ? 'live_1' : 'live', color, false, isPinch);
+            else {
+                drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: isPinch ? '#facc15' : color, lineWidth: 5});
+                drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 5});
+            }
         }
     }
 
     if (gameState.mode === 'TUTORIAL') {
-        if (render) drawTutorial(canvasCtx, canvasElement.width, canvasElement.height);
+        if (render && (!touchDevice || gameState.tutorialStep === 2)) drawTutorial(canvasCtx, worldWidth(), worldHeight());
     } else {
-        evaluateRules();
-        if (render) drawWorld(canvasCtx, canvasElement.width, canvasElement.height);
+        if (!touchDevice || gameState.mode !== 'IDLE') evaluateRules();
+        if (render) drawWorld(canvasCtx, worldWidth(), worldHeight());
     }
 
+    if (render && getSettings().showSkeleton) robotHands2D?.draw(canvasCtx);
     canvasCtx.restore();
+    if (touchDevice && deathBanner.text && Date.now() < deathBanner.until) {
+        instruction.textContent = deathBanner.text;
+    } else syncTouchHud();
 }
 
-// Animation continues smoothly while camera inference runs at a lower rate.
 function animate(timestamp: number): void {
     requestAnimationFrame(animate);
     if (document.hidden) { frameClock.reset(); return; }
@@ -468,7 +581,7 @@ let hands: any = null;
 let trackingReady: Promise<void> | null = null;
 let camera: any = null;
 let cameraStarted = false;
-let cameraStarting: Promise<void> | null = null;
+let cameraStarting: Promise<boolean> | null = null;
 let detectionPending = false;
 let lastDetectionAt = -Infinity;
 let detectionFailed = false;
@@ -487,24 +600,23 @@ async function initializeTracking(): Promise<void> {
     await trackingReady;
 }
 
-// Camera requests and model inference cannot overlap. Lower menu frequency and
-// a 640x480 stream leave CPU/GPU time for rendering and two-hand tracking.
-async function ensureCamera(): Promise<void> {
-    if (cameraStarted) return;
+async function ensureCamera(): Promise<boolean> {
+    if (touchDevice) return false;
+    if (cameraStarted) return true;
     if (cameraStarting) return cameraStarting;
     cameraStarting = (async () => {
         try {
             await initializeTracking();
         } catch {
             setStatusMessage(t('camera.unavailable'));
-            return;
+            return false;
         }
         hands.setOptions({ maxNumHands: current() === 'game' && (gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL') ? 1 : 2 });
         if (!camera) {
             camera = new Camera(videoElement, {
                 onFrame: async () => {
                     const now = performance.now();
-                    const interval = current() === 'game' && !isPaused() ? 1000 / 30 : 1000 / 15;
+                    const interval = (current() === 'game' && !isPaused()) || current() === 'game3d' ? 1000 / 30 : 1000 / 15;
                     if (document.hidden || detectionPending || now - lastDetectionAt < interval) return;
                     lastDetectionAt = now;
                     detectionPending = true;
@@ -525,21 +637,22 @@ async function ensureCamera(): Promise<void> {
             await camera.start();
             cameraStarted = true;
             setCameraStarted();
+            return true;
         } catch {
             writeText(instruction, t('camera.unavailable'));
             setStatusMessage(t('status.cameraBlocked'));
             if (current() === 'game') show('menu');
+            return false;
         }
     })().finally(() => { cameraStarting = null; });
     return cameraStarting;
 }
 onEnterGame(() => {
+    if (touchDevice) return;
     hands?.setOptions({ maxNumHands: gameState.difficulty === 'easy' || gameState.mode === 'TUTORIAL' ? 1 : 2 });
     void ensureCamera();
 });
 
-// Freeze recording/live timers while the tab is hidden, discard stale hands,
-// and resume without a physics/echo catch-up burst.
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
     frameClock.reset();
@@ -553,18 +666,57 @@ document.addEventListener('visibilitychange', () => {
     hiddenAt = 0;
 });
 
-// Pinch grabs objects while recording/replaying clones and in the tutorial drag
-// step; everywhere else the hand cursor behaves as in the menus.
+let threeSession: { dispose(): void } | null = null;
+let threeLoadGeneration = 0;
+onChange(scene => {
+    const generation = ++threeLoadGeneration;
+    threeSession?.dispose();
+    threeSession = null;
+    if (scene !== 'game3d') return;
+    hands?.setOptions({ maxNumHands: get3DDifficulty() === 'easy' ? 1 : 2 });
+    const host = document.getElementById('scene-game3d');
+    if (!host) return;
+    const loading = document.createElement('p');
+    loading.className = 'three-loading';
+    loading.textContent = t('modes.loading3d');
+    host.replaceChildren(loading);
+    void import('./three/index').then(async ({ mountLevel3D }) => {
+        if (generation !== threeLoadGeneration || current() !== 'game3d') return;
+        const mounted = await mountLevel3D(host, get3DDifficulty(), {
+            onExit: () => show('modes'),
+            onCameraRequest: async () => {
+                if (!await ensureCamera()) throw new Error('Camera unavailable');
+            }
+        });
+        if (generation !== threeLoadGeneration || current() !== 'game3d') mounted.dispose();
+        else threeSession = mounted;
+    }).catch(error => {
+        if (generation !== threeLoadGeneration || current() !== 'game3d') return;
+        console.error('Unable to start 3D level', error);
+        const message = document.createElement('p');
+        message.textContent = t('modes.error3d');
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.dataset.dwell = '';
+        back.className = 'menu-btn';
+        back.textContent = t('levels.back');
+        back.onclick = () => show('modes');
+        host.replaceChildren(message, back);
+    });
+});
 setUiContext(() => {
+    if (current() === 'game3d') return false;
     const grabbing = gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING'
         || (gameState.mode === 'TUTORIAL' && gameState.tutorialStep === 2);
     return current() !== 'game' || !grabbing || !!document.querySelector('dialog[open]');
 });
 
-show('menu');
-void ensureCamera();
-void (async () => {
-    await initializeAccount();
+show('intro');
+if (!touchDevice) void ensureCamera();
+const accountReady = initializeAccount();
+setIntroContinue(async () => {
+    await accountReady;
     await requireSignIn();
-    unlockAudioContext();
-})();
+    if (!touchDevice) unlockAudioContext();
+    show('menu');
+});

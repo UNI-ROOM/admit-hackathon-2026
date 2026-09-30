@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { isFist, isPinching } from '../src/utils';
 
 type P = { x: number; y: number };
-// Build a hand from wrist, per-finger middle joints and tips (index, middle, ring, pinky).
 function hand(joints: P[], tips: P[], thumb: P) {
     const h = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.6 }));
     h[0] = { x: 0.5, y: 0.8 };
@@ -23,7 +22,6 @@ test('a real fist with the thumb resting on the index finger is a fist', () => {
 });
 
 test('a fist turned sideways is still a fist', () => {
-    // Wrist on the left, fingers pointing right and folded back towards the wrist.
     const h = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.5 }));
     h[0] = { x: 0.3, y: 0.5 }; h[9] = { x: 0.45, y: 0.5 };
     [6, 10, 14, 18].forEach((j, i) => { h[j] = { x: 0.52, y: 0.44 + i * 0.04 }; });

@@ -1,7 +1,6 @@
-// Client-side device preferences (not game progress — that lives on the server).
-// Persisted to localStorage under 'vencera.settings'.
 
 import { setSfxEnabled, setMusicEnabled, setMusicVolume } from './audio';
+import { browserLanguage } from './i18n';
 
 export interface Settings {
     sfx: boolean;
@@ -23,7 +22,7 @@ const DEFAULT_SETTINGS: Settings = {
     mirror: true,
     showSkeleton: true,
     hints: true,
-    language: 'en',
+    language: browserLanguage(),
     cameraDeviceId: null
 };
 
@@ -63,7 +62,6 @@ function saveSettings(settings: Settings): void {
     try {
         storage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch {
-        // ignore quota/serialization errors
     }
 }
 
@@ -73,14 +71,12 @@ function applyAudioSettings(settings: Settings): void {
         setMusicEnabled(settings.music);
         setMusicVolume(settings.musicVolume);
     } catch {
-        // audio may be unavailable (e.g. Node test environment)
     }
 }
 
 let currentSettings: Settings = loadSettings();
 const listeners = new Set<Listener>();
 
-// Apply audio state on module load.
 applyAudioSettings(currentSettings);
 
 export function getSettings(): Settings {
