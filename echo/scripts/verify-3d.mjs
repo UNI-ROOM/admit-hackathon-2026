@@ -79,6 +79,11 @@ try {
         assert.ok(dimensions.width >= 1000 && dimensions.height >= 600, 'scene fills desktop viewport');
         await page.screenshot({ path: fileURLToPath(new URL(`3d-${difficulty}.png`, artifacts)) });
 
+        await move(3.05, 1.55, 1.05);
+        await page.mouse.down(); await page.mouse.up();
+        await page.waitForTimeout(100);
+        assert.equal(await page.evaluate(() => window.__echo3D.getPandaAnimation().playful), true, 'a quick click greets the player even between animation frames');
+
         // Check that pause suspends the actual simulation clock.
         await action('pause').click();
         const pausedAt = (await diagnostic()).elapsed;
@@ -106,6 +111,16 @@ try {
         await page.waitForTimeout(180);
         assert.equal(await page.evaluate(() => window.__echo3D.rules.panda.owner), 0, 'panda head acquires a grip');
         assert.match(await page.evaluate(() => window.__echo3D.getPandaAnimation().mood), /pickup|carry/);
+        const pandaBeforeTurn = await page.evaluate(() => ({ ...window.__echo3D.rules.panda }));
+        await page.mouse.wheel(0, 120);
+        await page.waitForTimeout(120);
+        const wheelAngle = await page.evaluate(() => window.__echo3D.getPandaAnimation().rotation);
+        assert.ok(wheelAngle > .3, 'scroll turns the held panda');
+        assert.ok(await page.evaluate(() => window.__echo3D.getPandaAnimation().facing) > .2, 'the visible model actually rotates');
+        await page.keyboard.down('e'); await page.waitForTimeout(200); await page.keyboard.up('e');
+        assert.ok(await page.evaluate(() => window.__echo3D.getPandaAnimation().rotation) > wheelAngle + .2, 'E turns the held panda');
+        assert.deepEqual(await page.evaluate(() => ({ ...window.__echo3D.rules.panda })), pandaBeforeTurn, 'rotation preserves position and grip');
+        report.checks.push(`${difficulty}: wheel and keyboard rotate the panda without moving or releasing it`);
         assert.match(await page.locator('.e3-grip-feedback[data-hand="0"]').innerText(), /HOLDING PANDA/);
         await page.screenshot({ path: fileURLToPath(new URL(`3d-${difficulty}-grip.png`, artifacts)) });
         await move(-3.15, 1.55, 1.05);

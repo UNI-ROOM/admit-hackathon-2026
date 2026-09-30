@@ -3,7 +3,7 @@ import * as THREE from 'three';
 export interface PandaInput {
     x: number; z: number; held: boolean; hovered: boolean;
     charge: number; ready: boolean; mistakes: number; won: boolean;
-    lookX: number; lookZ: number;
+    lookX: number; lookZ: number; rotation?: number;
 }
 type Rig = {
     body: THREE.Group; head: THREE.Group; arms: THREE.Group[]; feet: THREE.Group[];
@@ -20,15 +20,23 @@ export class PandaAnimator {
     private previous: PandaInput | null = null;
     private vx = 0;
     private vz = 0;
+    private facing = 0;
+    private affection = 0;
+    private heldTime = 0;
     private particle = new THREE.Object3D();
     mood: PandaMood = 'arrival';
     constructor(private rig: Rig) {}
-    reset() { this.clock = this.eventTime = this.vx = this.vz = 0; this.previous = null; this.mood = 'arrival'; }
+    reset() { this.clock = this.eventTime = this.vx = this.vz = this.facing = this.affection = this.heldTime = 0; this.previous = null; this.mood = 'arrival'; }
+    pet() { if (this.affection < .2) this.affection = 1.5; }
+    get playful() { return this.affection > 0; }
     get elapsed() { return this.clock; }
     update(dt: number, input: PandaInput) {
         if (!(dt > 0) || !Number.isFinite(dt)) return;
         dt = Math.min(dt, .05); this.clock += dt; this.eventTime += dt;
         const prev = this.previous;
+        this.affection = Math.max(0, this.affection - dt);
+        if (prev?.held && !input.held && this.heldTime < .35 && input.mistakes === prev.mistakes) this.pet();
+        this.heldTime = input.held ? this.heldTime + dt : 0;
         const event = input.won && !prev?.won ? 'victory'
             : prev && input.mistakes > prev.mistakes ? 'hurt'
             : input.held && !prev?.held ? 'pickup'
@@ -58,19 +66,24 @@ export class PandaAnimator {
             squash = -.08 * celebrate; lean = .12 * Math.sin(e * 6); armsUp = 2.25 + Math.sin(e * 12) * .25;
             headTilt = -.12 * Math.sin(e * 6); kick = .23 * Math.sin(e * 6); eyeOpen = .7;
         }
+        const happy = this.affection > 0 && !input.held && !input.won && this.mood !== 'hurt';
+        if (happy) { lift += Math.max(0, Math.sin((1.5 - this.affection) * 5)) * .10; headTilt = -.13; eyeOpen = .65; }
         const blinkPhase = t % 4.3;
         if (blinkPhase > 3.8 && blinkPhase < 4.02) eyeOpen *= 1 - .94 * Math.sin((blinkPhase - 3.8) / .22 * Math.PI);
         const breathe = Math.sin(t * 2.5) * .008;
         body.position.y += (lift + breathe - body.position.y) * blend;
         body.scale.set(1 + squash * .5, 1 - squash + breathe, 1 + squash * .35);
-        body.rotation.set(input.held ? this.vz * .035 : 0, Math.sin(t * .7) * .025, lean);
+        const targetFacing = input.won ? this.facing + Math.atan2(Math.sin(-this.facing), Math.cos(-this.facing))
+            : Number.isFinite(input.rotation) ? input.rotation! : 0;
+        this.facing += (targetFacing - this.facing) * blend;
+        body.rotation.set(input.held ? this.vz * .035 : 0, this.facing + Math.sin(t * .7) * .025, lean);
         const look = input.held || input.won ? 0 : clamp((input.lookX - input.x) * .09, .28);
         head.rotation.y += (look - head.rotation.y) * blend;
         head.rotation.x += ((this.mood === 'curious' ? -.1 : this.mood === 'charging' ? -.06 : clamp((input.lookZ - input.z) * .015, .08)) - head.rotation.x) * blend;
         head.rotation.z += (headTilt - head.rotation.z) * blend;
         for (let i = 0; i < 2; i++) {
             const side = i ? 1 : -1;
-            arms[i].rotation.z += (side * armsUp - arms[i].rotation.z) * blend;
+            arms[i].rotation.z += (side * (happy && i === 1 ? 1.9 + Math.sin(t * 16) * .35 : armsUp) - arms[i].rotation.z) * blend;
             arms[i].rotation.x = input.held ? -.25 + side * Math.sin(t * 7) * .12 : 0;
             feet[i].rotation.x = side * kick; feet[i].rotation.z = side * celebrate * .18;
             eyes[i].scale.y = Math.max(.05, eyeOpen);
@@ -79,9 +92,9 @@ export class PandaAnimator {
         mouth.scale.set(input.won ? 1.3 : 1, this.mood === 'hurt' ? .35 : input.held ? 1.4 : 1, 1);
         badge.material.emissive.set(input.won || input.ready ? '#8adfff' : this.mood === 'hurt' ? '#ff8058' : '#7c8bf0');
         badge.material.emissiveIntensity = input.won ? 1.4 : .15 + input.charge * .8 + Math.sin(t * 3) * .08;
-        sparks.visible = input.won || this.mood === 'hurt' && e < .65 || this.mood === 'ready' && e < .8;
+        sparks.visible = happy || input.won || this.mood === 'hurt' && e < .65 || this.mood === 'ready' && e < .8;
         if (sparks.visible) for (let i = 0; i < 10; i++) {
-            const phase = input.won ? (e * .55 + i / 10) % 1 : Math.min(1, e / .8);
+            const phase = input.won || happy ? (e * .55 + i / 10) % 1 : Math.min(1, e / .8);
             const angle = i * Math.PI * 2 / 10 + t * .4;
             this.particle.position.set(Math.cos(angle) * (.4 + phase * .5), .65 + Math.sin(phase * Math.PI) * .9, Math.sin(angle) * (.4 + phase * .5));
             this.particle.rotation.set(t + i, t * 2, i);

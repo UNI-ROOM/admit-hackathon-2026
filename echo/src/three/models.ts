@@ -94,6 +94,7 @@ export function buildPanda(w: Workshop) {
     const head = new THREE.Group(); head.position.y = .96; body.add(head);
     const arms: THREE.Group[] = [], feet: THREE.Group[] = [], eyes: THREE.Group[] = [], ears: THREE.Mesh[] = [];
     w.sphere(body, [.32, .38, .26], [0, .48, 0], '#f9f1dc');
+    w.sphere(body, [.10, .095, .09], [0, .36, -.255], '#fff4de');
     w.sphere(head, [.41, .37, .34], [0, 0, 0], '#fff4de');
     for (const side of [-1, 1]) {
         ears.push(w.sphere(head, [.14, .15, .1], [side * .31, .28, 0], '#292033'));
@@ -157,20 +158,21 @@ export function buildDoor(w: Workshop) {
 }
 
 /** A lightweight robotic exoskeleton: each MediaPipe landmark is a real joint. */
-export function buildRobot(w: Workshop, color: string, ghost = false, side: -1 | 1 = -1) {
+export function buildRobot(w: Workshop, color: string, ghost = false, side: -1 | 1 = -1, minimal = false) {
     const root = new THREE.Group(); w.scene.add(root);
     const jointGeometry = w.geometry('robotJoint', () => new THREE.SphereGeometry(1, 8, 6));
     const boneGeometry = w.geometry('robotBone', () => new THREE.CylinderGeometry(1, 1, 1, 8));
     const shellGeometry = w.geometry('round', () => new RoundedBoxGeometry(1, 1, 1, 2, 0.1));
-    const metal = w.material(ghost ? '#a889d4' : '#4b385d', ghost ? '#a68ce0' : undefined, ghost ? 0.34 : 1);
-    const ivory = w.material(ghost ? '#d6b9ff' : '#fff0d8', ghost ? '#aa87df' : undefined, ghost ? 0.3 : 0.97);
-    const accent = w.material(color, color, ghost ? 0.48 : 1);
+    const metal = w.material(ghost ? '#a889d4' : minimal ? '#71808e' : '#4b385d', ghost ? '#a68ce0' : undefined, ghost ? 0.34 : 1);
+    const ivory = w.material(ghost ? '#d6b9ff' : minimal ? '#c1ccd5' : '#fff0d8', ghost ? '#aa87df' : undefined, ghost ? 0.3 : 0.97);
+    const accent = w.material(color, minimal ? undefined : color, ghost ? 0.48 : 1);
     const joints = w.instances(jointGeometry, metal, 21, root);
     const bones = w.instances(boneGeometry, ivory, 20, root);
     const fingertips = w.instances(jointGeometry, accent, 5, root);
     const palm = w.mesh(shellGeometry, w.material(ghost ? '#b599e5' : '#eadbfb', ghost ? '#a783df' : undefined, ghost ? 0.1 : 0.18), root);
     const cuff = w.mesh(shellGeometry, accent, root);
     palm.castShadow = cuff.castShadow = false;
+    cuff.visible = !minimal;
     const cursor = w.ring(w.scene, 0.15, [0, 0.16, 0], color, ghost ? 0.018 : 0.026);
     const tips = [4, 8, 12, 16, 20];
     const tipIndices = new Set(tips), knuckleIndices = new Set([5, 9, 13, 17]);
@@ -191,7 +193,7 @@ export function buildRobot(w: Workshop, color: string, ghost = false, side: -1 |
             }
             dummy.position.copy(pose[i]); dummy.quaternion.identity();
             const radius = i === 0 ? 0.092 : tipIndices.has(i) ? 0.049 : knuckleIndices.has(i) ? 0.066 : 0.056;
-            dummy.scale.setScalar(radius); dummy.updateMatrix(); joints.setMatrixAt(i, dummy.matrix);
+            dummy.scale.setScalar(radius * (minimal ? .5 : 1)); dummy.updateMatrix(); joints.setMatrixAt(i, dummy.matrix);
         }
         initialized = points.length >= 21 || initialized;
         for (let i = 0; i < links.length; i++) {
@@ -201,17 +203,17 @@ export function buildRobot(w: Workshop, color: string, ghost = false, side: -1 |
             if (length > 1e-7) dummy.quaternion.setFromUnitVectors(up, direction.multiplyScalar(1 / length));
             else dummy.quaternion.identity();
             const radius = links[i][0] === 0 ? 0.049 : 0.042;
-            dummy.scale.set(radius, Math.max(length, 0.00001), radius); dummy.updateMatrix(); bones.setMatrixAt(i, dummy.matrix);
+            dummy.scale.set(radius * (minimal ? .42 : 1), Math.max(length, 0.00001), radius * (minimal ? .42 : 1)); dummy.updateMatrix(); bones.setMatrixAt(i, dummy.matrix);
         }
         for (let i = 0; i < tips.length; i++) {
-            dummy.position.copy(pose[tips[i]]); dummy.quaternion.identity(); dummy.scale.setScalar(0.058);
+            dummy.position.copy(pose[tips[i]]); dummy.quaternion.identity(); dummy.scale.setScalar(minimal ? .026 : .058);
             dummy.updateMatrix(); fingertips.setMatrixAt(i, dummy.matrix);
         }
         joints.instanceMatrix.needsUpdate = bones.instanceMatrix.needsUpdate = fingertips.instanceMatrix.needsUpdate = true;
         mcp.copy(pose[5]).add(pose[9]).add(pose[13]).add(pose[17]).multiplyScalar(0.25);
         xAxis.subVectors(pose[17], pose[5]); const width = xAxis.length();
         zAxis.subVectors(pose[0], mcp); const length = zAxis.length();
-        palm.visible = width > 0.025 && length > 0.025;
+        palm.visible = !minimal && width > 0.025 && length > 0.025;
         if (palm.visible) {
             xAxis.normalize(); zAxis.normalize(); yAxis.crossVectors(zAxis, xAxis);
             if (yAxis.lengthSq() > 1e-8) {

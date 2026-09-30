@@ -60,3 +60,13 @@ test('panda animation reuses geometry and stays finite through movement and repe
     assert.equal(w.resources.size, resources, 'animation does not create GPU resources each frame');
     w.dispose();
 });
+
+test('a short pinch greets the player, while a normal carry does not trigger a greeting', () => {
+    const { w, panda, input, advance } = setup();
+    advance(1); input.held = true; advance(.15); input.held = false; advance(.02);
+    assert.equal(panda.animator.playful, true);
+    advance(2); assert.equal(panda.animator.playful, false);
+    input.held = true; advance(.6); input.held = false; advance(.02);
+    assert.equal(panda.animator.playful, false);
+    w.dispose();
+});

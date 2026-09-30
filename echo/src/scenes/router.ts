@@ -1,11 +1,12 @@
-// Scene router: Menu -> Mode Select -> Level Select -> Game.
+// Scene router: Intro -> Menu -> Mode Select -> Level Select -> Game.
 // Toggles the `hidden` attribute on the top-level scene containers and
 // notifies listeners. Also owns the "enter game" hook so the camera can be
 // started lazily (only once the player actually enters the game scene).
 
-export type SceneName = 'menu' | 'modes' | 'levels' | 'game' | 'game3d';
+export type SceneName = 'intro' | 'menu' | 'modes' | 'levels' | 'game' | 'game3d';
 
 const SCENE_IDS: Record<SceneName, string> = {
+    intro: 'scene-intro',
     menu: 'scene-menu',
     modes: 'scene-modes',
     levels: 'scene-levels',
@@ -13,7 +14,7 @@ const SCENE_IDS: Record<SceneName, string> = {
     game3d: 'scene-game3d'
 };
 
-let currentScene: SceneName = 'menu';
+let currentScene: SceneName = 'intro';
 const changeListeners: Array<(scene: SceneName) => void> = [];
 const enterGameListeners: Array<() => void> = [];
 

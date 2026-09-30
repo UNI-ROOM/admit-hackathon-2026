@@ -11,6 +11,26 @@
 }
 
 body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }
+/* Small local HUD utilities replace the blocking Tailwind CDN runtime. */
+.flex { display: flex; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.items-center { align-items: center; }
+.w-full { width: 100%; }
+.text-center { text-align: center; }
+.text-sm { font-size: 14px; }
+.text-2xl { font-size: 24px; }
+.font-bold { font-weight: 700; }
+.mt-1 { margin-top: 4px; }
+.mb-8 { margin-bottom: 32px; }
+.uppercase { text-transform: uppercase; }
+.tracking-widest { letter-spacing: .1em; }
+.text-gray-400 { color: #9ca3af; }
+.text-yellow-400 { color: #facc15; }
+.text-red-500 { color: #ef4444; }
+.text-cyan-400 { color: #22d3ee; }
+.text-green-400 { color: #4ade80; }
+.min-w-\[250px\] { min-width: 250px; }
 #scene-game3d { position: fixed; inset: 0; width: 100%; height: 100dvh; }
 #scene-game3d[hidden] { display: none !important; }
 .three-loading { margin: 0; padding: 32px; font: 16px system-ui, sans-serif; }
@@ -21,8 +41,10 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
     background-image: radial-gradient(circle at center, rgba(43, 92, 255, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
 }
 #webcam { display: none; }
+#canvas-stage { position: absolute; inset: 0; }
 #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; }
 #game-canvas.mirrored { transform: scaleX(-1); }
+#touch-tools[hidden], #touch-progress[hidden] { display: none; }
 #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem; box-sizing: border-box; }
 
 .status-box { background: rgba(0, 0, 0, 0.82); border: 1px solid var(--grid); padding: 1rem 2rem; border-radius: 4px; text-align: center; transition: border-color 0.2s ease, box-shadow 0.2s ease; pointer-events: auto; }
@@ -82,7 +104,7 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .menu-panda-button { width: 100%; aspect-ratio: 1; padding: 0; border: 2px solid transparent; border-radius: 16px; overflow: hidden; background: transparent; cursor: pointer; touch-action: manipulation; }
 .menu-panda-button img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .menu-panda-button img[hidden] { display: none; }
-.menu-panda-button:hover, .menu-panda-button:focus-visible { border-color: var(--accent-2); outline: none; }
+.menu-panda-button:hover, .menu-panda-button:focus-visible { outline: none; }
 .menu-panda-button:active { transform: scale(.97); }
 .menu-panda-caption { font: 13px system-ui; color: var(--muted); }
 
@@ -329,3 +351,21 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .volume-slider:hover::-moz-range-thumb, .volume-slider:focus-visible::-moz-range-thumb { background: var(--accent-2); }
 .settings-panel button.volume-step { min-width: 36px; min-height: 36px; padding: 0; font: 16px/1 system-ui; }
 .volume-value { min-width: 3.2em; text-align: right; font: 12px var(--font-pixel); color: var(--accent-2); font-variant-numeric: tabular-nums; }
+
+/* --- Intro (jury welcome) ------------------------------------------------------- */
+.intro-scene { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 2rem 1.5rem; text-align: center; }
+.intro-text { max-width: 720px; display: grid; gap: .75rem; }
+.intro-kicker { margin: 0; font: 11px var(--font-pixel); color: var(--accent-2); letter-spacing: .08em; }
+.intro-title { margin: 0; font-size: clamp(28px, 4.5vw, 44px); }
+.intro-lead { margin: 0; font-size: clamp(15px, 1.6vw, 18px); line-height: 1.55; color: #cfd3dc; }
+.intro-next { color: var(--muted); }
+.intro-team-title { margin: .5rem 0 0; font: 12px var(--font-pixel); color: var(--muted); letter-spacing: .08em; }
+.intro-team { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem; }
+.intro-card { width: 240px; padding: 14px; border: 1px solid var(--grid); border-radius: 16px; background: rgba(255, 255, 255, .03); display: grid; gap: 6px; justify-items: center; }
+.intro-photo { width: 100%; aspect-ratio: 1; object-fit: cover; object-position: center 25%; border-radius: 12px; }
+.intro-nick { margin: 8px 0 0; font-size: 20px; }
+.intro-name, .intro-site-row { margin: 0; font-size: 14px; color: var(--muted); }
+.intro-site { color: var(--accent-2); text-decoration: none; }
+.intro-site:hover, .intro-site:focus-visible { text-decoration: underline; }
+.intro-continue { margin-top: .5rem; }
+@media (max-width: 640px) { .intro-card { width: min(240px, 42vw); padding: 10px; } .intro-scene { justify-content: flex-start; } }

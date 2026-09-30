@@ -21,6 +21,25 @@ export function recordedHands(frame: import('./types').EchoFrame): [HandLandmark
     return Array.isArray(frame) ? [frame, null] : frame.hands;
 }
 
+// Touch samples keep their real timing, including gaps on a slower device.
+// Older camera recordings retain their uniform frame-based representation.
+export function echoFrameAt(frames: import('./types').EchoFrame[], elapsedMs: number, durationMs: number) {
+    if (!frames.length) return null;
+    const timeAt = (index: number) => {
+        const frame = frames[index];
+        return frame && !Array.isArray(frame) && frame.timeMs !== undefined
+            ? frame.timeMs : index / frames.length * durationMs;
+    };
+    if (elapsedMs < timeAt(0)) return null;
+    let low = 0, high = frames.length - 1;
+    while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (timeAt(middle) <= elapsedMs) low = middle;
+        else high = middle - 1;
+    }
+    return frames[low];
+}
+
 // Detection order can change between frames. Keep two persistent identities
 // using handedness, with wrist distance as a fallback when labels are uncertain.
 export class LiveHandTracker {

@@ -13,10 +13,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com" defer></script>
 </head>
 <body>
-    <section id="scene-menu" class="scene menu-scene"></section>
+    <section id="scene-intro" class="scene intro-scene"></section>
+    <section id="scene-menu" class="scene menu-scene" hidden></section>
     <section id="scene-modes" class="scene modes-scene" hidden></section>
     <section id="scene-levels" class="scene levels-scene" hidden></section>
     <section id="scene-game3d" hidden></section>
@@ -51,6 +51,6 @@
         </div>
     </div>
 
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/bootstrap.ts"></script>
 </body>
 </html>

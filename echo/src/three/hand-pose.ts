@@ -22,14 +22,14 @@ export function tabletopHandBasis(viewElevation: number): HandBasis {
 
 // Keep the index tip at the game's interaction point. Relative joint positions
 // retain all five fingers, wrist rotation and depth, independent of camera distance.
-export function trackedHandPose(hand: HandLandmarks, mirror: boolean, aspect: number, basis: HandBasis): HandPose | null {
+export function trackedHandPose(hand: HandLandmarks, mirror: boolean, aspect: number, basis: HandBasis, reach = 1.4): HandPose | null {
     if (hand.length !== 21 || !Array.from(hand).every(p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z ?? 0))) return null;
     const span = (a: number, b: number) => Math.hypot((hand[a].x - hand[b].x) * aspect, hand[a].y - hand[b].y);
     const palm = Math.max(.035, span(0, 9), span(5, 17));
     const scale = .46 / palm, anchor = hand[8], flip = mirror ? -1 : 1;
     return hand.map(point => {
-        const x = clamp((point.x - anchor.x) * aspect * flip * scale, 1.4);
-        const y = clamp((anchor.y - point.y) * scale, 1.4);
+        const x = clamp((point.x - anchor.x) * aspect * flip * scale, reach);
+        const y = clamp((anchor.y - point.y) * scale, reach);
         const depth = clamp(((anchor.z ?? 0) - (point.z ?? 0)) * aspect * scale, .55);
         return {
             x: x + basis.up.x * y + basis.towardCamera.x * depth,

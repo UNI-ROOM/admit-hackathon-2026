@@ -4,6 +4,7 @@ import { Level3DRules, TARGET, PRISM_START, PANDA_START, DOOR, emptyInput, type 
 import type { HandLandmarks } from '../hands';
 import { getSettings } from '../settings';
 import { pointerHandPose, trackedHandPose, StableHandControl, tabletopHandBasis } from './hand-pose';
+import { PandaRotation } from './panda-rotation';
 import { playSfx } from '../audio';
 import './style.css';
 import './feedback.css';
@@ -17,7 +18,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     <div class="e3-actions"><span class="e3-mode">${difficulty === 'easy' ? 'SIMPLE · ONE HAND' : 'HARD · TWO HANDS'}</span><button data-action="restart" aria-label="Restart level">↻ Restart</button><button data-action="pause" aria-label="Pause game">Ⅱ Pause</button><button data-action="exit">Menu ↗</button></div></div>
     <aside class="e3-side"><div class="e3-side-title">YOUR NEXT MOVE</div><div class="e3-task"></div><div class="e3-charge"><div class="e3-charge-fill"></div></div><div class="e3-charge-label"><span>CRYSTAL CHARGE</span><span class="e3-percent">0%</span></div><div class="e3-live-note">Echo is optional. Charge the crystal, then bring the panda to the gate.</div></aside>
     <div class="e3-label" data-label="target">PRISM TARGET</div><div class="e3-label" data-label="prism">DRAG PRISM</div><div class="e3-label" data-label="panda">PANDA</div><div class="e3-label" data-label="exit">EXIT · LOCKED</div>
-    <div class="e3-bottom"><section class="e3-echo"><div class="e3-echo-head"><span>◌ ECHO MEMORY</span><span class="e3-record-status">NO MEMORY YET</span></div><div class="e3-timeline"><div class="e3-timeline-fill"></div></div><div class="e3-echo-buttons"><button class="primary" data-action="record">● Record echo</button><button class="record" data-action="save" disabled>Save echo · Space</button></div><div class="e3-controls">Drag objects with the mouse. <b>R</b> record · <b>Space</b> save.<br>${difficulty === 'hard' ? '<b>1 / 2</b> select a hand · ' : ''}<b>WASD / arrows</b> move · <b>F</b> grip.</div></section>
+    <div class="e3-bottom"><section class="e3-echo"><div class="e3-echo-head"><span>◌ ECHO MEMORY</span><span class="e3-record-status">NO MEMORY YET</span></div><div class="e3-timeline"><div class="e3-timeline-fill"></div></div><div class="e3-echo-buttons"><button class="primary" data-action="record">● Record echo</button><button class="record" data-action="save" disabled>Save echo · Space</button></div><div class="e3-controls">Drag objects with the mouse. <b>R</b> record · <b>Space</b> save.<br>${difficulty === 'hard' ? '<b>1 / 2</b> select a hand · ' : ''}<b>WASD / arrows</b> move · <b>F</b> grip.<br>Panda: <b>Q / E</b> or scroll to turn · quick pinch / click to wave.</div></section>
     <section class="e3-hands"><div class="e3-hands-title">${difficulty === 'easy' ? 'ROBOT OPERATOR' : 'ROBOT OPERATORS'}</div><div class="e3-hand-status"><span><i class="e3-hand-dot"></i>L <span class="e3-status-left">MOUSE</span></span><span ${difficulty === 'easy' ? 'hidden' : ''}><i class="e3-hand-dot right"></i>R <span class="e3-status-right">READY</span></span></div><button data-action="camera">Enable hand tracking</button><div class="e3-camera-preview" hidden><video muted autoplay playsinline></video><svg viewBox="0 0 160 100" aria-label="Tracked hands"></svg></div><p class="e3-camera-note">${difficulty === 'easy' ? 'One hand' : 'Two hands'}. Pinch thumb + index to grab.</p></section></div>
     <div class="e3-grip-feedback" data-hand="0" hidden></div><div class="e3-grip-feedback" data-hand="1" hidden></div>
     <div class="e3-toast" hidden></div><div class="e3-overlay" hidden><div class="e3-dialog"><div class="e3-dialog-icon">ECHO LAB / 01</div><h2></h2><p></p><div class="e3-dialog-actions"><button class="primary" data-action="resume">Resume</button><button data-action="again">Restart</button><button data-action="exit">Menu ↗</button></div></div></div>`;
@@ -60,6 +61,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     const rules = new Level3DRules(difficulty);
     const pointerHands: [Input3D, Input3D] = [emptyInput(difficulty === 'easy' ? 0 : -2.6, 2.4), emptyInput(2.6, 2.4)];
     const cameraHands: [Input3D, Input3D] = [emptyInput(), emptyInput()];
+    const pandaRotation = new PandaRotation();
     const cameraControls = [new StableHandControl(), new StableHandControl()];
     const pointerOffsets: ({ x: number; z: number } | null)[] = [null, null];
     const cameraOffsets: ({ x: number; z: number } | null)[] = [null, null];
@@ -70,6 +72,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     let cameraState: 'idle' | 'requesting' | 'ready' | 'unavailable' = 'idle';
     let shadowKey = '', performanceTime = 0, performanceFrames = 0, quality = 0, renderDirty = true;
     let pointerSlot: number | null = null;
+    let pandaPress: { x: number; y: number; time: number } | null = null;
     const keys = new Set<string>(), cleanups: (() => void)[] = [];
     const raycaster = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.14), hit = new THREE.Vector3();
     const vector = new THREE.Vector3(), beamFrom = new THREE.Vector3(0, 0.48, -2.24), beamEnd = new THREE.Vector3(), reflectFrom = new THREE.Vector3(), reflectEnd = new THREE.Vector3(-2.95, 0.48, -0.75);
@@ -135,14 +138,24 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         if (paused || rules.won) return;
         renderer.domElement.focus(); pointerSlot = selected;
         const floor = screenPoint(event.clientX, event.clientY), object = pickObject(event.clientX, event.clientY);
+        pandaPress = object === rules.panda ? { x: event.clientX, y: event.clientY, time: performance.now() } : null;
         pointerOffsets[selected] = object ? { x: object.x - floor.x, z: object.z - floor.z } : null;
         updatePointer(event); pointerHands[selected].pinch = true;
         // Acquire on pointerdown, before a fast pointermove can leave the object.
         rules.hands[selected] = { ...pointerHands[selected] }; rules.step(0);
         renderer.domElement.setPointerCapture(event.pointerId);
     }) as EventListener);
-    const releasePointer = () => { if (pointerSlot !== null) { pointerHands[pointerSlot].pinch = false; pointerOffsets[pointerSlot] = null; } pointerSlot = null; };
+    const releasePointer = (event?: PointerEvent) => {
+        if (event?.type === 'pointerup' && pandaPress && !paused && !rules.won && performance.now() - pandaPress.time < 350 && Math.hypot(event.clientX - pandaPress.x, event.clientY - pandaPress.y) < 8) panda.animator.pet();
+        pandaPress = null;
+        if (pointerSlot !== null) { pointerHands[pointerSlot].pinch = false; pointerOffsets[pointerSlot] = null; } pointerSlot = null; };
     listen(window, 'pointerup', releasePointer as EventListener);
+    listen(renderer.domElement, 'wheel', ((event: WheelEvent) => {
+        if (paused || rules.won || (rules.panda.owner === null && pickObject(event.clientX, event.clientY) !== rules.panda)) return;
+        event.preventDefault();
+        const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1);
+        pandaRotation.turn(Math.max(-.45, Math.min(.45, delta * .006)));
+    }) as EventListener, { passive: false });
     listen(renderer.domElement, 'pointercancel', releasePointer as EventListener);
     function setPaused(value: boolean) {
         paused = value; renderDirty = true; pointerSlot = null; pointerOffsets.fill(null); keys.clear(); pointerHands.forEach(hand => { hand.pinch = false; });
@@ -152,7 +165,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         query('.e3-dialog p').textContent = 'The laboratory is paused. Your echo and progress are waiting.';
         query('[data-action="resume"]').hidden = false;
     }
-    function restart() { rules.reset(); panda.animator.reset(); victoryAt = -1; delete overlay.dataset.victory; pointerSlot = null; pointerOffsets.fill(null); cameraOffsets.fill(null); cameraControls.forEach(control => control.reset()); pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); keys.clear(); paused = false; overlay.hidden = true; previousWin = previousDoor = false; previousMistakes = 0; }
+    function restart() { rules.reset(); panda.animator.reset(); pandaRotation.reset(); pandaPress = null; victoryAt = -1; delete overlay.dataset.victory; pointerSlot = null; pointerOffsets.fill(null); cameraOffsets.fill(null); cameraControls.forEach(control => control.reset()); pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); keys.clear(); paused = false; overlay.hidden = true; previousWin = previousDoor = false; previousMistakes = 0; }
     function begin() { rules.beginRecording(); paused = false; overlay.hidden = true; previousWin = false; }
     function finish() { if (rules.finishRecording()) pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); }
     listen(window, 'keydown', ((event: KeyboardEvent) => {
@@ -295,11 +308,16 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
             }
             panda.root.position.set(rules.panda.x, 0, rules.panda.z);
             const nearbyHand = rules.hands.find(hand => hand.active && Math.hypot(hand.x - rules.panda.x, hand.z - rules.panda.z) < 1.2);
+            if (!paused && !rules.won) {
+                const owner = rules.panda.owner;
+                pandaRotation.update(owner, owner === null ? undefined : [...rules.hands, ...rules.ghosts][owner]?.pose);
+                if (owner !== null || nearbyHand) pandaRotation.turn((Number(keys.has('e')) - Number(keys.has('q'))) * dt * 2.4);
+            }
             panda.animator.update(paused ? 0 : dt, {
                 x: rules.panda.x, z: rules.panda.z, held: rules.panda.owner !== null,
                 hovered: !!nearbyHand, charge: rules.charge, ready: rules.doorOpen,
                 mistakes: rules.mistakes, won: rules.won,
-                lookX: nearbyHand?.x ?? rules.prism.x, lookZ: nearbyHand?.z ?? rules.prism.z
+                lookX: nearbyHand?.x ?? rules.prism.x, lookZ: nearbyHand?.z ?? rules.prism.z, rotation: rules.won ? 0 : pandaRotation.angle
             });
             for (const [index, object] of [rules.panda, rules.prism].entries()) {
                 const hovered = rules.hands.some(hand => hand.active && Math.hypot(hand.x - object.x, hand.z - object.z) < 0.58);
@@ -353,7 +371,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
-    const debug = { rules, project, getPandaAnimation: () => ({ mood: panda.animator.mood, elapsed: panda.animator.elapsed, lift: panda.body.position.y, head: panda.head.rotation.toArray() }), getHandPoses: () => robots.map(robot => ({ visible: robot.root.visible, position: { x: robot.root.position.x, y: robot.root.position.y, z: robot.root.position.z }, pose: robot.getPose().map(point => ({ x: point.x, y: -point.y, z: -point.z })) })), getMetrics: () => ({ fps: fpsSum ? frames / fpsSum : 0, handCount: rules.handCount, liveRobots: robots.slice(0, 2).filter(robot => robot.root.visible).length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, pixelRatio: renderer.getPixelRatio(), quality, paused, disposed }), starts: { prism: PRISM_START, panda: PANDA_START, target: TARGET, door: DOOR } };
+    const debug = { rules, project, getPandaAnimation: () => ({ mood: panda.animator.mood, rotation: pandaRotation.angle, facing: panda.body.rotation.y, playful: panda.animator.playful, elapsed: panda.animator.elapsed, lift: panda.body.position.y, head: panda.head.rotation.toArray() }), getHandPoses: () => robots.map(robot => ({ visible: robot.root.visible, position: { x: robot.root.position.x, y: robot.root.position.y, z: robot.root.position.z }, pose: robot.getPose().map(point => ({ x: point.x, y: -point.y, z: -point.z })) })), getMetrics: () => ({ fps: fpsSum ? frames / fpsSum : 0, handCount: rules.handCount, liveRobots: robots.slice(0, 2).filter(robot => robot.root.visible).length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, pixelRatio: renderer.getPixelRatio(), quality, paused, disposed }), starts: { prism: PRISM_START, panda: PANDA_START, target: TARGET, door: DOOR } };
     const debugWindow = window as unknown as { __echo3D?: typeof debug };
     if (import.meta.env.DEV) debugWindow.__echo3D = debug;
     return { dispose() {
