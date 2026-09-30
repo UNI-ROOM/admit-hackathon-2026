@@ -31,7 +31,6 @@ test('defaults are correct', () => {
         mirror: true,
         showSkeleton: true,
         hints: true,
-        unlockAll: false,
         language: 'en',
         cameraDeviceId: null
     });
@@ -82,7 +81,7 @@ test('subscribe is called on update and unsubscribe stops notifications', () => 
 });
 
 test('resetSettings restores defaults and notifies subscribers', () => {
-    updateSettings({ sfx: false, hints: false, unlockAll: true });
+    updateSettings({ sfx: false, hints: false, mirror: false });
     let notified = false;
     const unsubscribe = subscribe(() => { notified = true; });
 
@@ -96,7 +95,6 @@ test('resetSettings restores defaults and notifies subscribers', () => {
         mirror: true,
         showSkeleton: true,
         hints: true,
-        unlockAll: false,
         language: 'en',
         cameraDeviceId: null
     });

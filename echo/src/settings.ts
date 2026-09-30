@@ -9,7 +9,6 @@ export interface Settings {
     mirror: boolean;
     showSkeleton: boolean;
     hints: boolean;
-    unlockAll: boolean;
     language: 'en' | 'ru';
     cameraDeviceId: string | null;
 }
@@ -22,7 +21,6 @@ const DEFAULT_SETTINGS: Settings = {
     mirror: true,
     showSkeleton: true,
     hints: true,
-    unlockAll: false,
     language: 'en',
     cameraDeviceId: null
 };
