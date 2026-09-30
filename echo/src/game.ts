@@ -2,6 +2,7 @@ import { Entity, GameState, Man, Lever, Door, TutorialBox, TutorialTarget, Laser
 import { drawUnmirroredText, isPinching } from './utils';
 import { LEVELS } from './levels';
 import { playSfx } from './audio';
+import { t } from './i18n';
 
 export const gameState: GameState = {
     deaths: 0, resets: 0, attemptStart: 0,
@@ -16,7 +17,7 @@ export const gameState: GameState = {
     recordStartTime: 0,
     RECORD_DURATION: 10000,
     currentLevel: 1,
-    baseInstruction: "ОБУЧЕНИЕ 1/4: Покажи полностью открытую ладонь!"
+    baseInstruction: t('tutorial.step1.instruction')
 };
 
 export function getAgentColor(agentId: string): string {
@@ -36,10 +37,10 @@ export function getAgentAlphaColor(agentId: string): string {
 }
 
 export function getAgentName(agentId: string): string {
-    if (agentId === 'ghost_0' || agentId === 'ghost') return 'Клон 1';
-    if (agentId === 'ghost_1') return 'Клон 2';
-    if (agentId === 'ghost_2') return 'Клон 3';
-    if (agentId === 'live') return 'Вы';
+    if (agentId === 'ghost_0' || agentId === 'ghost') return t('agent.clone', { n: 1 });
+    if (agentId === 'ghost_1') return t('agent.clone', { n: 2 });
+    if (agentId === 'ghost_2') return t('agent.clone', { n: 3 });
+    if (agentId === 'live') return t('agent.you');
     return agentId;
 }
 
@@ -201,7 +202,7 @@ export function updateAndDrawParticles(ctx: CanvasRenderingContext2D, width: num
 }
 
 let lastDeathTime = 0;
-export function triggerManDeath(message: string = 'ЧЕЛОВЕЧЕК СГОРЕЛ! 🔥 ПЕРЕЗАПУСК...') {
+export function triggerManDeath(message: string = t('death.default')) {
     const now = Date.now();
     if (now - lastDeathTime < 1000) return;
     lastDeathTime = now;
@@ -348,7 +349,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, 'РЫЧАГ', lvx, lvyTop - 20, '24px sans-serif', 'white');
+        drawUnmirroredText(ctx, t('canvas.lever'), lvx, lvyTop - 20, '24px sans-serif', 'white');
     }
 
     // Door
@@ -363,7 +364,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
     ctx.lineWidth = 4;
     ctx.strokeRect(doorX, doorY, doorW, doorH);
     
-    drawUnmirroredText(ctx, door.open ? 'ВЫХОД ОТКРЫТ' : 'ЗАКРЫТО', doorX + doorW/2, doorY - 10, '24px sans-serif', 'white');
+    drawUnmirroredText(ctx, door.open ? t('canvas.exitOpen') : t('canvas.locked'), doorX + doorW/2, doorY - 10, '24px sans-serif', 'white');
 
     // Laser (Vertical beam)
     if (laser && laser.active) {
@@ -439,7 +440,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
+        drawUnmirroredText(ctx, t('canvas.shield'), px, py - ph/2 - 10, '16px sans-serif', 'white');
     }
 
     // Prism
@@ -496,7 +497,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         }
         ctx.restore();
 
-        drawUnmirroredText(ctx, 'ПРИЗМА', px, py - ph / 2 - 12, 'bold 16px sans-serif', '#38bdf8');
+        drawUnmirroredText(ctx, t('canvas.prism'), px, py - ph / 2 - 12, 'bold 16px sans-serif', '#38bdf8');
     }
 
     // Crystal
@@ -589,7 +590,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
 
         ctx.restore();
 
-        drawUnmirroredText(ctx, 'КРИСТАЛЛ', cx, cy - ch / 2 - 18, 'bold 18px sans-serif', crystal.charged ? '#38bdf8' : '#94a3b8');
+        drawUnmirroredText(ctx, t('canvas.crystal'), cx, cy - ch / 2 - 18, 'bold 18px sans-serif', crystal.charged ? '#38bdf8' : '#94a3b8');
         drawUnmirroredText(ctx, `${Math.round(crystal.charge * 100)}%`, cx, cy + ch / 2 + 24, 'bold 16px sans-serif', crystal.charged ? '#4ade80' : '#38bdf8');
     }
 
@@ -761,7 +762,7 @@ export function drawTutorial(ctx: CanvasRenderingContext2D, canvasWidth: number,
         ctx.setLineDash([10, 10]);
         ctx.stroke();
         ctx.setLineDash([]);
-        drawUnmirroredText(ctx, 'ЦЕЛЬ', tx, ty - tr - 10, '20px sans-serif', '#4ade80');
+        drawUnmirroredText(ctx, t('canvas.target'), tx, ty - tr - 10, '20px sans-serif', '#4ade80');
         
         const bx = tutorialBox.x * canvasWidth;
         const by = tutorialBox.y * canvasHeight;
@@ -772,16 +773,16 @@ export function drawTutorial(ctx: CanvasRenderingContext2D, canvasWidth: number,
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
         ctx.strokeRect(bx - size/2, by - size/2, size, size);
-        drawUnmirroredText(ctx, 'БЛОК', bx, by - size/2 - 10, '16px sans-serif', 'white');
+        drawUnmirroredText(ctx, t('canvas.block'), bx, by - size/2 - 10, '16px sans-serif', 'white');
     } else if (gameState.tutorialStep === 3) {
         const cx = canvasWidth / 2;
         const cy = canvasHeight / 2;
-        drawUnmirroredText(ctx, 'Сожми кулак и держи!', cx, cy, '32px sans-serif', '#ef4444');
+        drawUnmirroredText(ctx, t('tutorial.step3.canvasHint'), cx, cy, '32px sans-serif', '#ef4444');
     } else if (gameState.tutorialStep === 4) {
         const cx = canvasWidth / 2;
         const cy = canvasHeight / 2;
-        drawUnmirroredText(ctx, '☝️ Вытяни указательный палец', cx, cy, '32px sans-serif', '#4ade80');
-        drawUnmirroredText(ctx, 'и наведи на уровень в меню сверху', cx, cy + 40, '20px sans-serif', '#facc15');
+        drawUnmirroredText(ctx, t('tutorial.step4.canvasHint1'), cx, cy, '32px sans-serif', '#4ade80');
+        drawUnmirroredText(ctx, t('tutorial.step4.canvasHint2'), cx, cy + 40, '20px sans-serif', '#facc15');
     }
 }
 
@@ -1002,7 +1003,7 @@ export function evaluateRules() {
         if (Math.abs(man.x - door.x) < door.width/2 && Math.abs(man.y - door.y) < door.height/2) {
             if (gameState.mode === 'PLAYING') {
                 gameState.mode = 'WON';
-                gameState.baseInstruction = "🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!";
+                gameState.baseInstruction = t('win.instructionSingle');
                 playSfx('win');
             }
         }

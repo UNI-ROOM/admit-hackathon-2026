@@ -1,32 +1,41 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ECHO: Временная петля (God Mode)</title>
+    <title>Vencera Echo Game</title>
+    <meta name="description" content="Vencera Echo Game — cooperate with your past self using only a webcam. Built at ADMIT Hackathon 2026.">
+    <meta property="og:title" content="Vencera Echo Game">
+    <meta property="og:description" content="Cooperate with your past self using only a webcam. Built at ADMIT Hackathon 2026.">
+    <meta property="og:image" content="/brand/admit-hackathon.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
-    <div id="game-container">
+    <section id="scene-menu" class="scene menu-scene"></section>
+    <section id="scene-levels" class="scene levels-scene" hidden></section>
+
+    <div id="game-container" hidden>
         <video id="webcam" autoplay playsinline></video>
         <canvas id="game-canvas"></canvas>
-        
+
         <div id="ui-layer">
             <div class="flex justify-between w-full">
                 <div class="status-box">
-                    <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 tracking-wider">ECHO: Временная Петля</h1>
-                    <p id="level-title" class="text-sm text-gray-400 mt-1 uppercase tracking-widest">Обучение</p>
-                    <select id="level-switcher" class="mt-2 bg-black border border-gray-600 text-white text-sm p-1 rounded focus:outline-none focus:border-purple-500 pointer-events-auto cursor-pointer">
-                    </select>
+                    <h1 class="hud-title">VENCERA ECHO GAME</h1>
+                    <p id="level-title" class="text-sm text-gray-400 mt-1 uppercase tracking-widest">Tutorial</p>
+                    <button id="hud-menu-button" type="button" data-dwell class="hud-menu-btn">☰ MENU</button>
                 </div>
-                <div id="mode-indicator" class="status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400">ОБУЧЕНИЕ 1/4</div>
+                <div id="mode-indicator" class="status-box text-2xl font-bold flex items-center justify-center min-w-[250px] text-yellow-400">TUTORIAL 1/4</div>
             </div>
             <div class="text-center mb-8">
-                <p id="instruction" class="text-2xl text-gray-100 bg-black/60 px-8 py-4 rounded-2xl inline-block backdrop-blur-md border border-white/20 shadow-2xl">
-                    Соедини пальцы (щипок), чтобы схватить объекты. Покажи ладонь, чтобы начать!
+                <p id="instruction" class="instruction-box">
+                    Pinch your fingers together to grab objects. Show your palm to start!
                 </p>
             </div>
         </div>

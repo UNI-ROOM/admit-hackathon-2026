@@ -9,10 +9,15 @@ test('Canvas text uses ctx.scale(-1, 1)', () => {
     assert.match(utilsCode, /ctx\.scale\(-1,\s*1\)/, 'utils.ts should contain ctx.scale(-1, 1)');
 });
 
-test('CSS has transform: scaleX(-1) for canvas and webcam is hidden', () => {
+test('CSS flips canvas horizontally via the toggleable .mirrored class and webcam is hidden', () => {
     const cssCode = fs.readFileSync(path.join(process.cwd(), 'src/style.css'), 'utf8');
-    assert.match(cssCode, /#game-canvas\s*{[^}]*transform:\s*scaleX\(-1\)/, 'style.css should flip canvas horizontally');
+    // The "mirror" setting (settings.ts) toggles this class on #game-canvas at runtime
+    // instead of a hardcoded transform, so the user can turn mirroring off.
+    assert.match(cssCode, /#game-canvas\.mirrored\s*{[^}]*transform:\s*scaleX\(-1\)/, 'style.css should flip canvas horizontally when .mirrored is applied');
     assert.match(cssCode, /#webcam\s*{[^}]*display:\s*none/, 'style.css should hide webcam');
+
+    const mainCode = fs.readFileSync(path.join(process.cwd(), 'src/main.ts'), 'utf8');
+    assert.match(mainCode, /classList\.toggle\('mirrored',\s*getSettings\(\)\.mirror\)/, 'main.ts should toggle the mirrored class from the mirror setting');
 });
 
 test('Free-movement mechanics are intact (x, y float coordinates)', () => {

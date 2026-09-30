@@ -110,9 +110,9 @@ describe('ECHO Core Engine & Mechanics Suite (16 Unit Tests)', () => {
         assert.equal(getAgentColor('ghost_0'), '#06b6d4'); // Cyan
         assert.equal(getAgentColor('ghost_1'), '#a855f7'); // Purple
         assert.equal(getAgentColor('live'), '#f97316');    // Amber / Live
-        assert.equal(getAgentName('ghost_0'), 'Клон 1');
-        assert.equal(getAgentName('ghost_1'), 'Клон 2');
-        assert.equal(getAgentName('live'), 'Вы');
+        assert.equal(getAgentName('ghost_0'), 'Clone 1');
+        assert.equal(getAgentName('ghost_1'), 'Clone 2');
+        assert.equal(getAgentName('live'), 'You');
     });
 
     test('11. Particle Engine: spawns sparks within bounded capacity without memory leaks', () => {

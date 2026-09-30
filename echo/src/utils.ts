@@ -64,7 +64,8 @@ export function isPointing(landmarks: any[]) {
 export function drawUnmirroredText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, font: string, color: string) {
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(-1, 1);
+    // Counter-flip only while the canvas itself is CSS-mirrored, so labels stay readable either way.
+    if (ctx.canvas?.classList?.contains?.('mirrored') ?? true) ctx.scale(-1, 1);
     ctx.font = font;
     ctx.fillStyle = color;
     ctx.textAlign = 'center';
