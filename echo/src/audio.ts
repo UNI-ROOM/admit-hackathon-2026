@@ -25,28 +25,6 @@ export function unlockAudioContext(): void {
     }
 }
 
-// Auto-unlock on first user gesture/interaction anywhere on the page
-if (typeof window !== 'undefined') {
-    // Eagerly pre-load audio file in memory
-    getMusicAudio();
-
-    const events = ['click', 'pointerdown', 'keydown', 'touchstart', 'mousemove', 'pointermove', 'focus'];
-    const unlocker = () => {
-        unlockAudioContext();
-        if (musicPlaying) {
-            events.forEach(evt => window.removeEventListener(evt, unlocker));
-        }
-    };
-    events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true, capture: true }));
-
-    // Attempt immediate playback on initial script load
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        unlockAudioContext();
-    } else {
-        window.addEventListener('DOMContentLoaded', () => unlockAudioContext(), { once: true });
-    }
-}
-
 // ---------------------------------------------------------------------------
 // SFX enable/disable
 // ---------------------------------------------------------------------------
@@ -388,5 +366,29 @@ export function playSfx(id: SfxId): void {
         }
     } catch {
         // Silently continue if audio playback fails
+    }
+}
+
+// Runs last: the music state above must be initialized first (a bundled
+// module turns an earlier call into volume = undefined and aborts startup).
+// Auto-unlock on first user gesture/interaction anywhere on the page
+if (typeof window !== 'undefined') {
+    // Eagerly pre-load audio file in memory
+    getMusicAudio();
+
+    const events = ['click', 'pointerdown', 'keydown', 'touchstart', 'mousemove', 'pointermove', 'focus'];
+    const unlocker = () => {
+        unlockAudioContext();
+        if (musicPlaying) {
+            events.forEach(evt => window.removeEventListener(evt, unlocker));
+        }
+    };
+    events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true, capture: true }));
+
+    // Attempt immediate playback on initial script load
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        unlockAudioContext();
+    } else {
+        window.addEventListener('DOMContentLoaded', () => unlockAudioContext(), { once: true });
     }
 }
