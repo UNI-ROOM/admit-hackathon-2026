@@ -3,7 +3,7 @@ import { Workshop, buildRoom, buildPanda, buildPrism, buildReceiver, buildDoor, 
 import { Level3DRules, TARGET, PRISM_START, PANDA_START, DOOR, emptyInput, type Input3D, type Difficulty3D } from './rules';
 import type { HandLandmarks } from '../hands';
 import { getSettings } from '../settings';
-import { pointerHandPose, trackedHandPose, StableHandControl, tabletopHandBasis } from './hand-pose';
+import { pointerHandPose, trackedHandPose, StableHandControl, tabletopHandBasis, pettingHandOrigin } from './hand-pose';
 import { PandaRotation } from './panda-rotation';
 import { playSfx } from '../audio';
 import './style.css';
@@ -60,6 +60,8 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
     for (const halo of gripHalos) { halo.material = halo.material.clone(); w.resources.add(halo.material as THREE.Material); }
     const rules = new Level3DRules(difficulty);
     const pointerHands: [Input3D, Input3D] = [emptyInput(difficulty === 'easy' ? 0 : -2.6, 2.4), emptyInput(2.6, 2.4)];
+    const pettingBlend = robots.map(() => 0);
+    const pettingCrown = new THREE.Vector3();
     const cameraHands: [Input3D, Input3D] = [emptyInput(), emptyInput()];
     const pandaRotation = new PandaRotation();
     const cameraControls = [new StableHandControl(), new StableHandControl()];
@@ -166,7 +168,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         query('.e3-dialog p').textContent = 'The laboratory is paused. Your echo and progress are waiting.';
         query('[data-action="resume"]').hidden = false;
     }
-    function restart() { rules.reset(); panda.animator.reset(); pandaRotation.reset(); pandaPress = null; victoryAt = -1; delete overlay.dataset.victory; pointerSlot = null; pointerOffsets.fill(null); cameraOffsets.fill(null); cameraControls.forEach(control => control.reset()); pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); keys.clear(); paused = false; overlay.hidden = true; previousWin = previousDoor = false; previousMistakes = 0; }
+    function restart() { pettingBlend.fill(0); rules.reset(); panda.animator.reset(); pandaRotation.reset(); pandaPress = null; victoryAt = -1; delete overlay.dataset.victory; pointerSlot = null; pointerOffsets.fill(null); cameraOffsets.fill(null); cameraControls.forEach(control => control.reset()); pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); keys.clear(); paused = false; overlay.hidden = true; previousWin = previousDoor = false; previousMistakes = 0; }
     function begin() { rules.beginRecording(); paused = false; overlay.hidden = true; previousWin = false; }
     function finish() { if (rules.finishRecording()) pointerHands.forEach(hand => { hand.pinch = false; hand.active = false; }); }
     listen(window, 'keydown', ((event: KeyboardEvent) => {
@@ -293,6 +295,10 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         label(labels[0], TARGET.x, TARGET.z + 0.55); label(labels[1], rules.prism.x, rules.prism.z, 1.2);
         labels[2].hidden = rules.won; label(labels[2], rules.panda.x, rules.panda.z, 1.55); label(labels[3], DOOR.x, DOOR.z, 2.0);
     }
+    function isPettingHand(hand: Input3D) {
+        return !rules.won && rules.panda.owner === null && hand.active && !hand.pinch
+            && Math.hypot(hand.x - rules.panda.x, hand.z - rules.panda.z) < .58;
+    }
     function tick(now: number) {
         if (disposed) return;
         const frameSeconds = (now - last) / 1000;
@@ -317,8 +323,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
             panda.animator.update(paused ? 0 : dt, {
                 x: rules.panda.x, z: rules.panda.z, held: rules.panda.owner !== null,
                 hovered: !!nearbyHand,
-                petting: rules.panda.owner === null && rules.hands.some(hand => hand.active && !hand.pinch
-                    && Math.hypot(hand.x - rules.panda.x, hand.z - rules.panda.z) < .58),
+                petting: rules.hands.some(isPettingHand),
                 charge: rules.charge, ready: rules.doorOpen,
                 mistakes: rules.mistakes, won: rules.won,
                 lookX: nearbyHand?.x ?? rules.prism.x, lookZ: nearbyHand?.z ?? rules.prism.z, rotation: rules.won ? 0 : pandaRotation.angle
@@ -338,14 +343,26 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
             door.ring.visible = rules.doorOpen;
             beamEnd.set(0, 0.48, rules.aligned ? rules.prism.z : 2.55); beam.set(beamFrom, beamEnd);
             reflectFrom.set(0, 0.48, rules.prism.z); reflectEnd.z = rules.prism.z; reflection.set(reflectFrom, reflectEnd, rules.aligned);
+            pettingCrown.set(0, .43, 0);
+            panda.head.localToWorld(pettingCrown);
             [...rules.hands, ...rules.ghosts].forEach((input, index) => {
                 const robot = robots[index], ghost = index >= 2;
                 robot.root.visible = robot.cursor.visible = !rules.won && index % 2 < rules.handCount && (ghost ? input.active && rules.echoReady : true);
                 const x = input.active ? input.x : difficulty === 'easy' ? 0 : index % 2 ? 2.6 : -2.6, z = input.active ? input.z : 2.55;
                 const held = [rules.panda, rules.prism].find(object => object.owner === index);
                 const pose = input.pose || fallbackPoses[index][Number(input.pinch)];
-                robot.root.position.set(x, .68, z);
                 robot.setPose(pose, 1 - Math.exp(-20 * dt));
+                const stroke = !ghost && isPettingHand(input);
+                if (held || input.pinch || !input.active || rules.won) pettingBlend[index] = 0;
+                else pettingBlend[index] += (Number(stroke) - pettingBlend[index]) * (1 - Math.exp(-12 * (paused ? 0 : dt)));
+                if (pettingBlend[index] < .001) pettingBlend[index] = 0;
+                const amount = pettingBlend[index];
+                const aboveHead = amount ? pettingHandOrigin(robot.getPose(), pettingCrown) : null;
+                robot.root.position.set(
+                    x + ((aboveHead?.x ?? x) - x) * amount,
+                    .68 + ((aboveHead?.y ?? .68) - .68) * amount,
+                    z + ((aboveHead?.z ?? z) - z) * amount
+                );
                 robot.cursor.position.set(x, 0.17, z); robot.cursor.scale.setScalar(held ? 1.6 : input.pinch ? 1.15 : 1);
             });
             if (rules.prism.owner !== previousOwner && rules.prism.owner !== null) playSfx('grab'); previousOwner = rules.prism.owner;
@@ -375,7 +392,7 @@ export function mountLevel3D(container: HTMLElement, difficulty: Difficulty3D, o
         raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
-    const debug = { rules, project, getPandaAnimation: () => ({ mood: panda.animator.mood, rotation: pandaRotation.angle, facing: panda.body.rotation.y, playful: panda.animator.playful, petting: panda.animator.petting, eyes: panda.animator.eyeOpenness, elapsed: panda.animator.elapsed, lift: panda.body.position.y, head: panda.head.rotation.toArray() }), getHandPoses: () => robots.map(robot => ({ visible: robot.root.visible, position: { x: robot.root.position.x, y: robot.root.position.y, z: robot.root.position.z }, pose: robot.getPose().map(point => ({ x: point.x, y: -point.y, z: -point.z })) })), getMetrics: () => ({ fps: fpsSum ? frames / fpsSum : 0, handCount: rules.handCount, liveRobots: robots.slice(0, 2).filter(robot => robot.root.visible).length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, pixelRatio: renderer.getPixelRatio(), quality, paused, disposed }), starts: { prism: PRISM_START, panda: PANDA_START, target: TARGET, door: DOOR } };
+    const debug = { rules, project, getPandaAnimation: () => ({ mood: panda.animator.mood, rotation: pandaRotation.angle, facing: panda.body.rotation.y, playful: panda.animator.playful, petting: panda.animator.petting, eyes: panda.animator.eyeOpenness, crown: { x: pettingCrown.x, y: pettingCrown.y, z: pettingCrown.z }, elapsed: panda.animator.elapsed, lift: panda.body.position.y, head: panda.head.rotation.toArray() }), getHandPoses: () => robots.map(robot => ({ visible: robot.root.visible, position: { x: robot.root.position.x, y: robot.root.position.y, z: robot.root.position.z }, pose: robot.getPose().map(point => ({ x: point.x, y: -point.y, z: -point.z })) })), getMetrics: () => ({ fps: fpsSum ? frames / fpsSum : 0, handCount: rules.handCount, liveRobots: robots.slice(0, 2).filter(robot => robot.root.visible).length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, pixelRatio: renderer.getPixelRatio(), quality, paused, disposed }), starts: { prism: PRISM_START, panda: PANDA_START, target: TARGET, door: DOOR } };
     const debugWindow = window as unknown as { __echo3D?: typeof debug };
     if (import.meta.env.DEV) debugWindow.__echo3D = debug;
     return { dispose() {

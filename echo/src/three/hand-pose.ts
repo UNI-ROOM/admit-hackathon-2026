@@ -85,6 +85,17 @@ export function pointerHandPose(side: -1 | 1, pinch: boolean): HandPose {
     return points;
 }
 
+// Center the rendered palm above the animated head, after the robot's PI-X flip.
+// Keep every joint clear of the crown without changing the tracked finger pose.
+export function pettingHandOrigin(pose: readonly Joint3D[], crown: Joint3D): Joint3D {
+    const palm = { x: pose[0].x * .5, z: pose[0].z * .5 };
+    for (const index of [5, 9, 13, 17]) {
+        palm.x += pose[index].x * .125;
+        palm.z += pose[index].z * .125;
+    }
+    return { x: crown.x - palm.x, y: crown.y + .10 + Math.max(...pose.map(point => point.y)), z: crown.z + palm.z };
+}
+
 export function copyHandPose(pose: HandPose | undefined): HandPose | undefined {
     return pose?.map(point => ({ ...point }));
 }

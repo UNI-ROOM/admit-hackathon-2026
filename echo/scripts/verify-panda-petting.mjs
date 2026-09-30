@@ -26,6 +26,18 @@ try {
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`, { waitUntil: 'networkidle' });
     await page.locator('.intro-continue').click();
     const diagnostic = () => page.evaluate(() => ({ ...window.__echo3D.getPandaAnimation(), panda: { ...window.__echo3D.rules.panda }, mistakes: window.__echo3D.rules.mistakes }));
+    const assertAboveHead = async () => {
+        const placement = await page.evaluate(() => {
+            const game = window.__echo3D, crown = game.getPandaAnimation().crown;
+            const hand = game.getHandPoses()[0];
+            const world = hand.pose.map(p => ({x: hand.position.x + p.x, y: hand.position.y + p.y, z: hand.position.z + p.z}));
+            const palm = {x:world[0].x * .5, z:world[0].z * .5};
+            for (const index of [5,9,13,17]) {palm.x += world[index].x * .125; palm.z += world[index].z * .125;}
+            return { crown, palm, lowest: Math.min(...world.map(p => p.y)) };
+        });
+        assert.ok(placement.lowest >= placement.crown.y + .08, 'all rendered joints stay above the crown');
+        assert.ok(Math.hypot(placement.palm.x - placement.crown.x, placement.palm.z - placement.crown.z) < .04, 'the palm is centered over the head, not the pointing fingertip');
+    };
     const move = async (x, z, y = .14) => {
         const screen = await page.evaluate(({x,z,y}) => window.__echo3D.project(x,z,y), {x,z,y});
         await page.mouse.move(screen.x, screen.y);
@@ -41,6 +53,7 @@ try {
         assert.equal(state.panda.owner, null); assert.equal(state.mistakes, 0);
         assert.equal(state.panda.x, before.panda.x); assert.equal(state.panda.z, before.panda.z);
         assert.ok(state.eyes.every(eye => eye < .3));
+        await assertAboveHead();
         await page.screenshot({ path: `${artifacts}/${difficulty}-mouse-petting.png` });
         checks.push(`${difficulty}: hovering over the visible panda pets it without clicking or moving it`);
         await move(-2.5, 2.4);
@@ -69,6 +82,7 @@ try {
         await page.waitForTimeout(400);
         state = await diagnostic(); assert.equal(state.panda.owner, null);
         assert.ok(state.eyes.every(eye => eye < .3));
+        await assertAboveHead();
         await page.screenshot({ path: `${artifacts}/${difficulty}-camera-petting.png` });
         checks.push(`${difficulty}: an open tracked hand pets the panda through the real camera callback`);
         await page.locator('[data-action="pause"]').click();
@@ -84,6 +98,7 @@ try {
         await page.locator('[data-action="exit"]').filter({ visible: true }).last().click();
         await page.waitForFunction(() => !window.__echo3D);
     }
+    checks.push('Mouse and tracked palms rest above the animated crown with clear fingers and an unchanged grab point');
     assert.deepEqual(errors, []);
     await writeFile(`${artifacts}/report.json`, JSON.stringify({checks, errors}, null, 2));
     console.log(JSON.stringify(checks, null, 2));

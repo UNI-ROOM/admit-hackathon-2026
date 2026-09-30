@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
-    trackedHandPose, pointerHandPose, copyHandPose, StableHandControl, tabletopHandBasis,
+    trackedHandPose, pointerHandPose, pettingHandOrigin, copyHandPose, StableHandControl, tabletopHandBasis,
     type HandPose, type HandBasis
 } from '../src/three/hand-pose';
 import { Workshop, buildRobot } from '../src/three/models';
@@ -265,4 +265,24 @@ test('recording, replay and released Save preserve immutable articulated finger 
     rules.reset();
     assert.equal(rules.ghosts[0].pose, undefined);
     assert.equal(copyHandPose(undefined), undefined);
+});
+
+
+test('petting centers the palm over the crown and keeps every joint above the head without changing articulation', () => {
+    const crown = { x: 3.05, y: 1.4, z: 1.55 };
+    for (const side of [-1, 1] as const) {
+        const pose = pointerHandPose(side, false);
+        // Exercise a depth-tilted tracked pose as well as the mouse fallback.
+        for (const points of [pose, pose.map(p => ({ ...p, y: p.y + p.z * .3 }))]) {
+            const before = JSON.stringify(points);
+            const origin = pettingHandOrigin(points, crown);
+            const world = points.map(p => ({ x: origin.x + p.x, y: origin.y - p.y, z: origin.z - p.z }));
+            const palm = { x: world[0].x * .5, z: world[0].z * .5 };
+            for (const index of [5, 9, 13, 17]) { palm.x += world[index].x * .125; palm.z += world[index].z * .125; }
+            assert.ok(Math.abs(palm.x - crown.x) < 1e-10);
+            assert.ok(Math.abs(palm.z - crown.z) < 1e-10);
+            assert.ok(world.every(p => p.y >= crown.y + .099));
+            assert.equal(JSON.stringify(points), before);
+        }
+    }
 });
