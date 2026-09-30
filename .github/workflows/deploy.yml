@@ -2,18 +2,45 @@ name: Test, build containers and deploy ECHO
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**.md']
   pull_request:
+    paths-ignore: ['docs/**', '**.md']
   workflow_dispatch:
 permissions:
   contents: read
+  pull-requests: read
 defaults:
   run:
     shell: bash
 concurrency:
   group: echo-${{ github.ref }}
   cancel-in-progress: false
+# Tests and image builds run in parallel; deploy waits for all of them.
+# Each test job skips its steps when its part of the repo is unchanged
+# (manual runs always test everything).
 jobs:
-  test:
+  test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            web: ['echo/**', 'shared/**', '.github/workflows/**']
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: echo/package-lock.json
+      - if: steps.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          npm ci --prefix echo
+          npm test --prefix echo
+          npm run build --prefix echo
+
+  test-api:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -30,29 +57,47 @@ jobs:
       TEST_DATABASE_URL: postgresql://echo_test:echo_test@127.0.0.1:5432/echo_test
     steps:
       - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            api: ['server/**', 'shared/**', '.github/workflows/**']
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            echo/package-lock.json
-            server/package-lock.json
-      - run: npm ci --prefix echo
-      - run: npm test --prefix echo
-      - run: npm run build --prefix echo
-      - run: npm ci --prefix server
-      - run: npm run check --prefix server
-      - run: npm test --prefix server
+          cache-dependency-path: server/package-lock.json
+      - if: steps.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          npm ci --prefix server
+          npm run check --prefix server
+          npm test --prefix server
 
   build:
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build separate frontend and API images
-        run: |
-          docker build -f echo/Dockerfile --target prod -t "echo-web:$GITHUB_SHA" .
-          docker build -f server/Dockerfile -t "echo-api:$GITHUB_SHA" .
+      - uses: docker/setup-buildx-action@v3
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: echo/Dockerfile
+          target: prod
+          tags: echo-web:${{ github.sha }}
+          load: true
+          cache-from: type=gha,scope=echo-web
+          cache-to: type=gha,mode=max,scope=echo-web
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          tags: echo-api:${{ github.sha }}
+          load: true
+          cache-from: type=gha,scope=echo-api
+          cache-to: type=gha,mode=max,scope=echo-api
       - name: Start full stack and check routing
         env:
           POSTGRES_PASSWORD: ci-integration-only
@@ -71,7 +116,7 @@ jobs:
         run: docker compose logs --tail 100
       - name: Package immutable images
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: docker save "echo-web:$GITHUB_SHA" "echo-api:$GITHUB_SHA" | gzip > images.tar.gz
+        run: docker save "echo-web:$GITHUB_SHA" "echo-api:$GITHUB_SHA" | gzip -1 > images.tar.gz
       - uses: actions/upload-artifact@v4
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
@@ -82,11 +127,16 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: build
+    needs: [test-web, test-api, build]
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            docker-compose.yml
+            deploy/release.sh
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           name: images-${{ github.sha }}
