@@ -739,6 +739,8 @@ show('intro');
 if (!touchDevice) void ensureCamera();
 void (async () => {
     await initializeAccount();
+    // Sign-in comes after the welcome screen, not on top of it.
+    if (current() === 'intro') await new Promise<void>(resolve => onChange(scene => { if (scene !== 'intro') resolve(); }));
     await requireSignIn();
     if (!touchDevice) unlockAudioContext();
 })();

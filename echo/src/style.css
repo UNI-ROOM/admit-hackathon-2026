@@ -375,3 +375,9 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .intro-lang-btn { min-width: 52px; min-height: 36px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; color: var(--muted); font: 11px var(--font-pixel); letter-spacing: 1px; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
 .intro-lang-btn:hover, .intro-lang-btn:focus-visible { color: var(--fg); outline: none; }
 .intro-lang-btn[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+/* Sign-in gate: "or" divider and the guest option under the e-mail form. */
+.account-panel .gate-or { display: flex; align-items: center; gap: 12px; margin: 18px 0 6px; font: 11px var(--font-pixel); color: var(--muted); text-transform: uppercase; }
+.account-panel .gate-or::before, .account-panel .gate-or::after { content: ''; flex: 1; height: 1px; background: #262626; }
+.account-panel .gate-guest-note { margin: 10px 0 0; font-size: 12px !important; line-height: 1.5; color: #6b6b6b; }
+.account-panel form p:empty { display: none; }

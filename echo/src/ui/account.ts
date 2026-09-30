@@ -14,7 +14,7 @@ onChange(scene => { hud.hidden = scene !== 'menu'; });
 function button(text:string, action:()=>void) { const b=document.createElement('button');b.textContent=text;b.type='button';b.dataset.dwell='';b.onclick=action;return b; }
 const login=button(t('account.signIn'),()=>auth());
 const nickname=button(t('account.nickname'),()=>editNickname());
-const logout=button(t('account.signOut'),()=>{ void (async()=>{try{await api.logout();session=await api.session();online=true;render();}catch{offline();}void requireSignIn();})(); });
+const logout=button(t('account.signOut'),()=>{ setGuestChosen(false); void (async()=>{try{await api.logout();session=await api.session();online=true;render();}catch{offline();}void requireSignIn();})(); });
 hud.append(identity,status);
 // Signed-in name and points, shown under the main menu title.
 export function accountBadge(){return hud;}
@@ -30,6 +30,7 @@ function auth(gate=false){
  const submit=document.createElement('button');submit.textContent=t('account.getCode');submit.type='submit';submit.className='is-primary';
  const feedback=document.createElement('p');form.append(email,code,submit,feedback);panel.append(form);
  const again=button(t('account.changeEmail'),()=>auth(gate));again.hidden=true;panel.append(again);
+ if(gate){const or=document.createElement('p');or.className='gate-or';or.textContent=t('gate.or');const guest=button(t('gate.guest'),()=>{setGuestChosen(true);gateStep();});guest.className='gate-guest';const note=document.createElement('p');note.className='gate-guest-note';note.textContent=t('gate.guestNote');panel.append(or,guest,note);}
  let sent=false;
  form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;feedback.textContent='';try{
   if(!session){session=await api.session();}
@@ -41,9 +42,13 @@ function editNickname(gate=false){open(t(gate?'gate.nicknameTitle':'account.nick
 async function fillBoard(container:HTMLElement){try{const rows=await api.leaderboard();const table=document.createElement('table');const head=table.createTHead().insertRow();for(const text of [t('account.tableHash'),t('account.tablePlayer'),t('account.tableScore'),t('account.tableLevels')]){const th=document.createElement('th');th.textContent=text;head.append(th);}const body=table.createTBody();rows.forEach((r,i)=>{const row=body.insertRow();if(r.isMe)row.className='is-me';for(const value of [i+1,r.nickname,r.total,r.levels])row.insertCell().textContent=String(value);});container.append(table);if(!rows.length){const p=document.createElement('p');p.textContent=t('account.noResults');container.append(p);}}catch{const p=document.createElement('p');p.textContent=t('account.leaderboardUnavailable');container.append(p);}}
 async function board(){open(t('account.top10'));const container=document.createElement('div');panel.append(container);await fillBoard(container);await appendYouRank(container);}
 async function appendYouRank(container:HTMLElement){try{const r=await api.rank();const p=document.createElement('p');p.textContent=r.rank?t('board.you',{rank:r.rank,total:r.total}):t('board.youNoRank');container.append(p);}catch{/* offline: skip */}}
-// Sign-in gate: playing requires an e-mail account and a chosen nickname.
+// Sign-in gate: sign in by e-mail or play as a guest, then choose a nickname.
 // If the server is unreachable, sign-in is impossible, so offline play stays available.
 const defaultNickname=(s:Session)=>/^(Guest|Гость)-\d+$/.test(s.user.nickname);
+// "Play as guest" is remembered in this browser; signing out asks again.
+const GUEST_KEY='vencera.guest';
+function guestChosen(){try{return localStorage.getItem(GUEST_KEY)==='1';}catch{return false;}}
+function setGuestChosen(on:boolean){try{if(on)localStorage.setItem(GUEST_KEY,'1');else localStorage.removeItem(GUEST_KEY);}catch{/* private mode */}}
 let gateDone:(()=>void)|null=null;
 panel.addEventListener('cancel',e=>{if(gateDone)e.preventDefault();});
 export function requireSignIn():Promise<void>{return new Promise(resolve=>{gateDone=resolve;gateStep();});}
@@ -51,7 +56,7 @@ function finishGate(){const done=gateDone;gateDone=null;panel.close();done?.();}
 function gateStep(){
  if(!gateDone)return;
  if(!session){open(t('gate.offlineTitle'),false);message(t('gate.offlineText'));panel.append(button(t('gate.retry'),()=>{void refreshSession().then(gateStep);}),button(t('gate.playOffline'),finishGate));return;}
- if(session.user.isGuest){auth(true);return;}
+ if(session.user.isGuest&&!guestChosen()){auth(true);return;}
  if(defaultNickname(session)){editNickname(true);return;}
  finishGate();
 }
