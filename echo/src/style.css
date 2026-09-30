@@ -75,6 +75,22 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .menu-subtitle { font-family: var(--font-pixel); font-size: clamp(1rem, 3vw, 1.5rem); margin: 12px 0 0; letter-spacing: 3px; color: var(--accent); }
 .menu-tagline { font: 14px system-ui; color: var(--muted); margin: 14px 0 0; }
 
+.menu-panda { position: absolute; right: clamp(20px, 5vw, 96px); bottom: 80px; width: clamp(144px, 18vw, 232px); display: grid; justify-items: center; gap: 8px; }
+.menu-panda-button { width: 100%; aspect-ratio: 1; padding: 0; border: 2px solid transparent; border-radius: 50%; overflow: hidden; background: #000; cursor: pointer; touch-action: manipulation; }
+.menu-panda-button video { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.menu-panda-button video[hidden] { display: none; }
+.menu-panda-button:hover, .menu-panda-button:focus-visible { border-color: var(--accent-2); outline: none; }
+.menu-panda-button:active { transform: scale(.97); }
+.menu-panda-caption { font: 13px system-ui; color: var(--muted); }
+
+@media (max-width: 800px) {
+    .menu-scene { justify-content: flex-start; gap: 24px; padding: 24px 20px; }
+    .menu-buttons { max-width: 100%; }
+    .menu-panda { position: static; width: 176px; flex-shrink: 0; }
+    .menu-scene .menu-status { position: static; margin-top: 8px; padding: 0; }
+    .account-hud:not([hidden]) { display: none; }
+}
+
 .menu-buttons { display: flex; flex-direction: column; gap: 12px; width: min(360px, 90vw); }
 
 .menu-btn, .level-card button, .account-hud button, .account-panel button, .settings-panel button {
@@ -176,7 +192,7 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
     .scene::after { animation: none !important; }
 }
 
-.account-hud { position: fixed; top: 104px; right: 16px; z-index: 30; display: flex; flex-wrap: wrap; gap: 8px; max-width: min(480px, 95vw); padding: 10px; border-radius: 4px; background: rgba(0, 0, 0, 0.9); border: 1px solid var(--grid); color: var(--fg); pointer-events: auto; font: 14px system-ui; }
+.account-hud { position: fixed; top: 16px; right: 16px; z-index: 30; display: flex; flex-wrap: wrap; gap: 8px; max-width: min(480px, 95vw); padding: 10px; border-radius: 4px; background: rgba(0, 0, 0, 0.9); border: 1px solid var(--grid); color: var(--fg); pointer-events: auto; font: 14px system-ui; }
 .account-hud span:nth-child(2) { color: var(--accent-2); }
 .account-hud button, .account-panel button, .settings-panel button { padding: 10px 14px; min-height: 44px; }
 .account-panel { z-index: 100; margin: auto; padding: 24px; width: min(540px, 94vw); max-height: 85vh; overflow: auto; background: #000; color: var(--fg); border: 1px solid var(--grid); border-radius: 4px; font: 16px system-ui; }

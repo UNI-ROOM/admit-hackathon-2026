@@ -6,6 +6,7 @@ import { show } from './router';
 import { cameraPermissionState } from '../camera';
 import { openProfile, openLeaderboard } from '../ui/account';
 import { openSettings } from './settings';
+import { createMenuPanda } from './menu-panda';
 
 const container = document.getElementById('scene-menu');
 
@@ -121,7 +122,7 @@ function render(): void {
     status.className = 'menu-status';
     status.id = 'menu-status-line';
 
-    container.append(badge, titleWrap, buttons, hint, status);
+    container.append(badge, titleWrap, buttons, createMenuPanda(), hint, status);
     void updateStatusLine();
 }
 

@@ -37,6 +37,7 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'app.name': 'Vencera Echo Game',
 
         'menu.tutorial': 'Tutorial',
+        'menu.pandaPoke': 'Poke me',
         'menu.builtAt': 'built at ADMIT Hackathon 2026',
         'menu.tagline': 'cooperate with your past self · webcam only',
         'menu.handHint': 'Point 👆 at a button, then touch thumb to middle finger to click — or hold for 1 s',
@@ -285,6 +286,7 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'app.name': 'ECHO',
 
         'menu.tutorial': 'Обучение',
+        'menu.pandaPoke': 'Тыкни меня',
         'menu.builtAt': 'сделано на ADMIT Hackathon 2026',
         'menu.tagline': 'сотрудничай с собой из прошлого · только веб-камера',
         'menu.handHint': 'Наведи 👆 на кнопку и коснись большим пальцем среднего — или держи 1 с',
