@@ -4,11 +4,12 @@ import { StateStabilizer, isFist, isOpenPalm, isPinching, drawUnmirroredText } f
 import {
     gameState, man, lever, tutorialBox, tutorialTarget,
     resetLevel, drawWorld, handleDragAndDrop, drawTutorial, handleTutorialDrag, evaluateRules,
-    getAgentColor, plate, prism, deathBanner
+    getAgentColor, plate, prism, deathBanner, startTwoHandPlay, playingTimeLeft
 } from './game';
 import { LEVELS } from './levels';
 import { playSfx, unlockAudioContext } from './audio';
 import { t } from './i18n';
+import { LiveHandTracker, type HandResults } from './hands';
 import { getSettings, subscribe as subscribeSettings } from './settings';
 import { show, current, onEnterGame } from './scenes/router';
 import { applyIdleHud, restartCurrentLevel } from './scenes/levels';
@@ -54,9 +55,20 @@ const fistStabilizer = new StateStabilizer(150, false);
 const hintStabilizer = new StateStabilizer(15, "");
 
 let handModelReady = false;
+const handTracker = new LiveHandTracker();
 
-function onResults(results: any) {
-    const liveHand = results.multiHandLandmarks ? results.multiHandLandmarks[0] : null;
+function startDirectRound(now: number): void {
+    startTwoHandPlay(now);
+    modeIndicator.innerText = t('playing.twoHandsTick', { time: Math.ceil(gameState.RECORD_DURATION / 1000) });
+    modeIndicator.className = 'status-box text-2xl font-bold text-green-400 playing';
+    instruction.innerHTML = gameState.baseInstruction;
+}
+
+function onResults(results: HandResults) {
+    const liveHands = handTracker.update(results);
+    const liveHand = liveHands[0] || liveHands[1];
+    const liveAgent = liveHands[0] ? 'live' : 'live_1';
+    const twoHands = liveHands.every(Boolean);
 
     // The pointing-finger dwell cursor works everywhere (menu, level select,
     // in-game HUD buttons), regardless of which scene is active.
@@ -82,7 +94,7 @@ function onResults(results: any) {
         canvasCtx.restore();
         modeIndicator.innerText = t('mode.success');
         modeIndicator.className = "status-box text-2xl font-bold text-green-400 playing";
-        instruction.innerHTML = t('win.instructionMulti');
+        instruction.innerHTML = t(gameState.directPlay && !gameState.recordedEchoes.length ? 'win.instructionTwoHands' : 'win.instructionMulti');
 
         // Reset after 8 seconds
         if (!gameState['wonTimeoutSet']) {
@@ -113,8 +125,7 @@ function onResults(results: any) {
                 restartCurrentLevel();
             };
             wonTimeout = setTimeout(nextLevel, 8000);
-            const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
-            void showResult({ levelId: gameState.currentLevel, timeLeftMs: Math.max(0, gameState.RECORD_DURATION * (1 - gameState.currentFrame / maxFrames)), echoesUsed: gameState.recordedEchoes.filter(e => e.some(Boolean)).length, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
+            void showResult({ levelId: gameState.currentLevel, timeLeftMs: playingTimeLeft(Date.now()), echoesUsed: gameState.recordedEchoes.filter(e => e.some(Boolean)).length, deaths: gameState.deaths, resets: gameState.resets }, nextLevel, replay);
         }
         return;
     }
@@ -167,6 +178,8 @@ function onResults(results: any) {
         }
     }
 
+    if (gameState.mode === 'RECORDING' && twoHands) startDirectRound(now);
+
     if (gameState.mode === 'TUTORIAL') {
         if (gameState.tutorialStep === 1) {
             if (liveHand && isOpenPalm(liveHand)) {
@@ -186,28 +199,33 @@ function onResults(results: any) {
             }
         }
     } else if (gameState.mode === 'IDLE') {
-        if (liveHand && isOpenPalm(liveHand)) {
+        if (liveHands.some(hand => hand && isOpenPalm(hand))) {
             if (!gameState.attemptStart) gameState.attemptStart = now;
-            gameState.mode = 'RECORDING';
-            gameState.recordStartTime = now;
-            gameState.echoIndex = 0;
-            gameState.recordedEchoes = [[]];
-            gameState.frames = [];
-            resetLevel();
+            if (twoHands) {
+                startDirectRound(now);
+            } else {
+                gameState.mode = 'RECORDING';
+                gameState.directPlay = false;
+                gameState.recordStartTime = now;
+                gameState.echoIndex = 0;
+                gameState.recordedEchoes = [[]];
+                gameState.frames = [];
+                resetLevel();
 
-            if (gameState.maxEchoes > 1) {
-                modeIndicator.innerText = t('recording.startMulti', { i: 1, max: gameState.maxEchoes });
-            } else {
-                modeIndicator.innerText = t('recording.start');
+                if (gameState.maxEchoes > 1) {
+                    modeIndicator.innerText = t('recording.startMulti', { i: 1, max: gameState.maxEchoes });
+                } else {
+                    modeIndicator.innerText = t('recording.start');
+                }
+                modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
+                const config = LEVELS[gameState.currentLevel - 1];
+                if (Array.isArray(config?.hintRecording)) {
+                    gameState.baseInstruction = config.hintRecording[0] || t('recording.continueDefault');
+                } else {
+                    gameState.baseInstruction = (config?.hintRecording as string) || t('recording.continueDefault');
+                }
+                instruction.innerHTML = gameState.baseInstruction;
             }
-            modeIndicator.className = "status-box text-2xl font-bold text-red-500 recording";
-            const config = LEVELS[gameState.currentLevel - 1];
-            if (Array.isArray(config?.hintRecording)) {
-                gameState.baseInstruction = config.hintRecording[0] || t('recording.continueDefault');
-            } else {
-                gameState.baseInstruction = (config?.hintRecording as string) || t('recording.continueDefault');
-            }
-            instruction.innerHTML = gameState.baseInstruction;
         }
     }
     else if (gameState.mode === 'RECORDING') {
@@ -271,6 +289,11 @@ function onResults(results: any) {
     }
     else if (gameState.mode === 'PLAYING') {
         const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
+        if (gameState.directPlay) {
+            const elapsed = now - gameState.playStartTime;
+            gameState.currentFrame = Math.min(maxFrames - 1, Math.floor(elapsed / gameState.RECORD_DURATION * maxFrames));
+            modeIndicator.innerText = t('playing.twoHandsTick', { time: Math.ceil(playingTimeLeft(now) / 1000) });
+        }
 
         for (let i = 0; i < gameState.recordedEchoes.length; i++) {
             const echo = gameState.recordedEchoes[i];
@@ -285,8 +308,8 @@ function onResults(results: any) {
             }
         }
 
-        gameState.currentFrame++;
-        if (gameState.currentFrame >= maxFrames) {
+        if (!gameState.directPlay) gameState.currentFrame++;
+        if (gameState.directPlay ? playingTimeLeft(now) <= 0 : gameState.currentFrame >= maxFrames) {
             gameState.mode = 'IDLE';
             gameState.recordedEchoes = [];
             gameState.echoIndex = 0;
@@ -299,7 +322,8 @@ function onResults(results: any) {
     }
 
     if (gameState.mode !== 'IDLE') {
-        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHand, 'live');
+        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[0], 'live');
+        handleDragAndDrop(canvasCtx, canvasElement.width, canvasElement.height, liveHands[1], 'live_1');
     }
 
     let currentHint = "";
@@ -334,10 +358,10 @@ function onResults(results: any) {
             if (liveHand[0].y > 0.8) {
                 currentHint = t('hint.raiseHand');
             } else if (isPinch && (gameState.mode === 'RECORDING' || gameState.mode === 'PLAYING') &&
-                       man.grabbedBy !== 'live' &&
-                       lever.grabbedBy !== 'live' &&
-                       (!plate || plate.grabbedBy !== 'live') &&
-                       (!prism || prism.grabbedBy !== 'live') &&
+                       man.grabbedBy !== liveAgent &&
+                       lever.grabbedBy !== liveAgent &&
+                       (!plate || plate.grabbedBy !== liveAgent) &&
+                       (!prism || prism.grabbedBy !== liveAgent) &&
                        closestDist > 0.15 && closestDist <= 0.30) {
                 let targetName = t('target.man');
                 let targetX = man.x;
@@ -376,11 +400,12 @@ function onResults(results: any) {
         instruction.innerHTML = (getSettings().hints && stableHint) ? stableHint : gameState.baseInstruction;
     }
 
-    if (liveHand) {
-        const isPinch = isPinching(liveHand);
+    for (const [index, hand] of liveHands.entries()) if (hand) {
+        const isPinch = isPinching(hand);
+        const color = getAgentColor(index === 0 ? 'live' : 'live_1');
         if (getSettings().showSkeleton) {
-            drawConnectors(canvasCtx, liveHand, HAND_CONNECTIONS, {color: isPinch ? '#facc15' : '#f97316', lineWidth: 5});
-            drawLandmarks(canvasCtx, liveHand, {color: '#ffffff', lineWidth: 2, radius: 5});
+            drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: isPinch ? '#facc15' : color, lineWidth: 5});
+            drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 2, radius: 5});
         }
     }
 
@@ -395,7 +420,7 @@ function onResults(results: any) {
 }
 
 const hands = new Hands({locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 hands.onResults(onResults);
 
 // The camera is only constructed/started lazily, the first time the player

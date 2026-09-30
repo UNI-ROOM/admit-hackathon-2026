@@ -13,6 +13,7 @@ export const gameState: GameState = {
     echoIndex: 0,
     maxEchoes: 1,
     playStartTime: 0,
+    directPlay: false,
     currentFrame: 0,
     recordStartTime: 0,
     RECORD_DURATION: 10000,
@@ -25,6 +26,7 @@ export function getAgentColor(agentId: string): string {
     if (agentId === 'ghost_1') return '#a855f7';
     if (agentId === 'ghost_2') return '#3b82f6';
     if (agentId === 'live') return '#f97316';
+    if (agentId === 'live_1') return '#22c55e';
     return '#f97316';
 }
 
@@ -33,6 +35,7 @@ export function getAgentAlphaColor(agentId: string): string {
     if (agentId === 'ghost_1') return 'rgba(168, 85, 247, 0.3)';
     if (agentId === 'ghost_2') return 'rgba(59, 130, 246, 0.3)';
     if (agentId === 'live') return 'rgba(249, 115, 22, 0.3)';
+    if (agentId === 'live_1') return 'rgba(34, 197, 94, 0.3)';
     return 'rgba(249, 115, 22, 0.3)';
 }
 
@@ -41,6 +44,7 @@ export function getAgentName(agentId: string): string {
     if (agentId === 'ghost_1') return t('agent.clone', { n: 2 });
     if (agentId === 'ghost_2') return t('agent.clone', { n: 3 });
     if (agentId === 'live') return t('agent.you');
+    if (agentId === 'live_1') return t('agent.otherHand');
     return agentId;
 }
 
@@ -88,11 +92,32 @@ function canGrab(object: Entity, objectId: ReplayObject, agentId: string): boole
 
 function grab(object: Entity, objectId: ReplayObject, agentId: string): void {
     object.grabbedBy = agentId;
-    if (agentId === 'live' && gameState.mode === 'RECORDING') {
+    if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
         const recording = gameState.recordedEchoes[gameState.echoIndex];
         if (recording) recordedObjects.get(recording)?.add(objectId);
     }
     playSfx('grab');
+}
+
+export function startTwoHandPlay(now: number): void {
+    const wasIdle = gameState.mode === 'IDLE';
+    // Only completed recordings become clones; the current partial recording
+    // stays under live control and must not reserve either hand's objects.
+    gameState.recordedEchoes = wasIdle ? [] : gameState.recordedEchoes.slice(0, gameState.echoIndex);
+    gameState.frames = gameState.recordedEchoes[0] || [];
+    gameState.echoIndex = gameState.recordedEchoes.length;
+    gameState.mode = 'PLAYING';
+    gameState.directPlay = true;
+    gameState.playStartTime = now;
+    gameState.currentFrame = 0;
+    gameState.baseInstruction = t('playing.twoHandsHint');
+    if (wasIdle) resetLevel();
+}
+
+export function playingTimeLeft(now: number): number {
+    if (gameState.directPlay) return Math.max(0, gameState.RECORD_DURATION - (now - gameState.playStartTime));
+    const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
+    return Math.max(0, gameState.RECORD_DURATION * (1 - gameState.currentFrame / maxFrames));
 }
 
 // --- Particle System ---
@@ -219,6 +244,7 @@ export function triggerManDeath(message: string = t('death.default')) {
 
     if (gameState.mode === 'PLAYING') {
         gameState.currentFrame = 0;
+        if (gameState.directPlay) gameState.playStartTime = now;
         if (lvl.plate && plate) {
             plate.x = lvl.plate.x;
             plate.y = lvl.plate.y;
@@ -237,6 +263,7 @@ export function triggerManDeath(message: string = t('death.default')) {
 }
 
 export function resetLevel() {
+    if (gameState.mode === 'IDLE' || gameState.mode === 'TUTORIAL') gameState.directPlay = false;
     const levelIndex = Math.min(gameState.currentLevel - 1, LEVELS.length - 1);
     const lvl = LEVELS[levelIndex];
     gameState.maxEchoes = lvl.maxEchoes || 1;
@@ -427,7 +454,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
         const pw = plate.width * canvasWidth;
         const ph = plate.height * canvasHeight;
         
-        ctx.fillStyle = plate.grabbedBy ? (plate.grabbedBy === 'live' ? '#f97316' : '#0ea5e9') : '#0284c7';
+        ctx.fillStyle = plate.grabbedBy ? getAgentColor(plate.grabbedBy) : '#0284c7';
         ctx.fillRect(px - pw/2, py - ph/2, pw, ph);
         ctx.strokeStyle = plate.grabbedBy ? getAgentColor(plate.grabbedBy) : '#bae6fd';
         ctx.lineWidth = 3;
@@ -636,7 +663,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
 }
 
 export function handleDragAndDrop(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, handLandmarks: any[] | null, agentId: string) {
-    if (agentId === 'live' && gameState.mode === 'RECORDING') {
+    if ((agentId === 'live' || agentId === 'live_1') && gameState.mode === 'RECORDING') {
         const recording = gameState.recordedEchoes[gameState.echoIndex];
         if (recording && !recordedObjects.has(recording)) recordedObjects.set(recording, new Set());
     }
@@ -866,6 +893,8 @@ export function evaluateRules() {
             let t = 0;
             if (gameState.mode === 'RECORDING') {
                 t = (Date.now() - gameState.recordStartTime) / 1000;
+            } else if (gameState.mode === 'PLAYING' && gameState.directPlay) {
+                t = (Date.now() - gameState.playStartTime) / 1000;
             } else if (gameState.mode === 'PLAYING') {
                 const maxFrames = Math.max(...gameState.recordedEchoes.map(e => e.length), 1);
                 const progress = maxFrames > 0 ? (gameState.currentFrame / maxFrames) : 0;
@@ -1003,7 +1032,7 @@ export function evaluateRules() {
         if (Math.abs(man.x - door.x) < door.width/2 && Math.abs(man.y - door.y) < door.height/2) {
             if (gameState.mode === 'PLAYING') {
                 gameState.mode = 'WON';
-                gameState.baseInstruction = t('win.instructionSingle');
+                gameState.baseInstruction = t(gameState.directPlay && !gameState.recordedEchoes.length ? 'win.instructionTwoHands' : 'win.instructionSingle');
                 playSfx('win');
             }
         }

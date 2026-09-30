@@ -46,6 +46,12 @@ npx --yes tsx --test
 
 ## 🎮 Gameplay & Levels
 
+### 👐 One or two hands
+
+Pinch with each hand to hold a different object. Show an open palm to start: one hand records a clone; two hands start a ten-second play round immediately. Adding a second hand during recording cancels the unfinished recording and starts play, keeping completed clones.
+
+Levels 1–2 can be completed without clones: hold the prism or shield with one hand and guide the little guy with the other. For Level 3, record one clone to hold the lever, then use both hands for the shield and the little guy. Clone objects remain reserved. Losing a hand releases only its object; the other hand keeps working.
+
 The game is built on the concept of **"cooperating with your past self"**: you record a stretch of time while performing one action (e.g. holding a shield against a deadly laser), and on the next loop your clone replays that movement with millisecond precision while you carry out the second part of the task.
 
 ```mermaid

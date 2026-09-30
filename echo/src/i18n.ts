@@ -64,6 +64,7 @@ export const STRINGS: { en: Dict; ru: Dict } = {
 
         'win.instructionMulti': '🏆 BRILLIANT! You and your clones saved him!',
         'win.instructionSingle': '🏆 BRILLIANT! You and your clone saved him!',
+        'win.instructionTwoHands': '🏆 BRILLIANT! Both hands saved him — no clone needed!',
 
         'reset.tutorialGood': 'GREAT!',
         'reset.loop': 'LOOP RESET',
@@ -76,6 +77,8 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'recording.echoContinue': 'ECHO {i}/{max}: Keep recording! (10 sec)',
 
         'playing.defaultHint': 'Grab the little guy and drag him to the DOOR!',
+        'playing.twoHandsHint': 'TWO HANDS: pinch with each hand to hold a different object. Keep one on the prism/shield and guide the little guy with the other!',
+        'playing.twoHandsTick': '👐 TWO HANDS: {time}s',
 
         'fail.instruction': 'Time is up! The door slammed shut. Raise your palm to restart.',
 
@@ -105,6 +108,7 @@ export const STRINGS: { en: Dict; ru: Dict } = {
 
         'agent.clone': 'Clone {n}',
         'agent.you': 'You',
+        'agent.otherHand': 'Other hand',
 
         'canvas.lever': 'LEVER',
         'canvas.exitOpen': 'EXIT OPEN',
@@ -274,6 +278,7 @@ export const STRINGS: { en: Dict; ru: Dict } = {
 
         'win.instructionMulti': '🏆 ГЕНИАЛЬНО! Вы и ваши клоны спасли его!',
         'win.instructionSingle': '🏆 ГЕНИАЛЬНО! Вы и ваш клон спасли его!',
+        'win.instructionTwoHands': '🏆 ГЕНИАЛЬНО! Спасли двумя руками без клона!',
 
         'reset.tutorialGood': 'ОТЛИЧНО!',
         'reset.loop': 'СБРОС ПЕТЛИ',
@@ -286,6 +291,8 @@ export const STRINGS: { en: Dict; ru: Dict } = {
         'recording.echoContinue': 'ЭХО {i}/{max}: Продолжай запись! (10 сек)',
 
         'playing.defaultHint': 'Хватай человечка и тащи к ДВЕРИ!',
+        'playing.twoHandsHint': 'ДВЕ РУКИ: захватывай щипком каждой руки свой объект. Одной держи призму/щит, другой веди человечка!',
+        'playing.twoHandsTick': '👐 ДВЕ РУКИ: {time}с',
 
         'fail.instruction': 'Время вышло! Дверь захлопнулась. Подними ладонь для рестарта.',
 
@@ -315,6 +322,7 @@ export const STRINGS: { en: Dict; ru: Dict } = {
 
         'agent.clone': 'Клон {n}',
         'agent.you': 'Вы',
+        'agent.otherHand': 'Вторая рука',
 
         'canvas.lever': 'РЫЧАГ',
         'canvas.exitOpen': 'ВЫХОД ОТКРЫТ',

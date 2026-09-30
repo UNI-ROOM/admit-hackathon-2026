@@ -83,6 +83,7 @@ export interface GameState {
     echoIndex: number;
     maxEchoes: number;
     playStartTime: number;
+    directPlay: boolean;
     currentFrame: number;
     recordStartTime: number;
     RECORD_DURATION: number;
