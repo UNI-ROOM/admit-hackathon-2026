@@ -1130,9 +1130,13 @@ export function evaluateRules() {
     // Hazard collision & Death mechanics
     let manHitByLaser = false;
     if (laser && laser.active) {
-        const hitW = 0.05; 
-        const hitH = 0.1; 
-        if (Math.abs(man.x - laser.x) < laser.width/2 + hitW) {
+        // Hitbox matches the drawn figure (arms reach ±20 px at 1280 wide).
+        const hitW = 0.025;
+        const hitH = 0.1;
+        // Standing under the shield protects the man even when the beam
+        // grazes just past its edge.
+        const shielded = !!plate && plate.y < man.y && Math.abs(man.x - plate.x) <= plate.width / 2;
+        if (!shielded && Math.abs(man.x - laser.x) < laser.width/2 + hitW) {
             if (man.y > laser.y && man.y - hitH < laser.y + laser.height) {
                 manHitByLaser = true;
             }

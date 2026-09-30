@@ -78,3 +78,38 @@ test('a shield below a fixed shelter cannot extend its beam back into the safe e
         assert.ok(laser!.height < shelterTop, 'a shield in front of the shelter can shorten the beam further');
     }
 });
+
+test('the beam grazing just past the shield edge does not kill the man under it', () => {
+    for (const level of [2, 3]) {
+        gameState.difficulty = 'hard';
+        gameState.currentLevel = level;
+        gameState.mode = 'PLAYING';
+        gameState.livePlay = true;
+        gameState.recordedEchoes = [];
+        gameState.deaths = 0;
+        resetLevel();
+        man.x = 0.5; man.y = 0.8; man.grabbedBy = 'live';
+        plate!.x = 0.5 + plate!.width / 2 - 0.02; plate!.y = 0.6; plate!.grabbedBy = 'live_1';
+        // Beam just outside the shield's left edge, within the old wide hitbox.
+        const edge = plate!.x - plate!.width / 2 - laser!.width / 2 - 0.005;
+        laser!.minX = edge; laser!.maxX = edge;
+        evaluateRules();
+        assert.ok(laser!.height > 0.6, 'the beam really passes beside the shield');
+        assert.equal(gameState.deaths, 0, `level ${level}: man under the shield survives`);
+    }
+});
+
+test('the man is still hit when he steps out from under the shield', () => {
+    gameState.difficulty = 'hard';
+    gameState.currentLevel = 2;
+    gameState.mode = 'PLAYING';
+    gameState.livePlay = true;
+    gameState.recordedEchoes = [];
+    gameState.deaths = 0;
+    resetLevel();
+    plate!.x = 0.3; plate!.y = 0.6; plate!.grabbedBy = 'live_1';
+    man.x = 0.6; man.y = 0.8; man.grabbedBy = 'live';
+    laser!.minX = 0.6; laser!.maxX = 0.6;
+    evaluateRules();
+    assert.equal(gameState.deaths, 1);
+});
