@@ -292,9 +292,12 @@ export function drawMan(ctx: CanvasRenderingContext2D, canvasWidth: number, canv
 export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) {
     const pit = LEVELS[gameState.currentLevel - 1]?.pit;
     if (pit) {
-        ctx.fillStyle = '#090617';
+        ctx.fillStyle = '#30112f';
         ctx.fillRect(pit.minX * canvasWidth, 0.82 * canvasHeight, (pit.maxX - pit.minX) * canvasWidth, 0.18 * canvasHeight);
-        drawUnmirroredText(ctx, 'ПРОПАСТЬ — ДЕРЖИ МОСТ', (pit.minX + pit.maxX) / 2 * canvasWidth, 0.92 * canvasHeight, 'bold 16px sans-serif', '#f87171');
+        ctx.fillStyle = '#f87171';
+        ctx.fillRect(pit.minX * canvasWidth, 0.82 * canvasHeight, 4, 0.18 * canvasHeight);
+        ctx.fillRect(pit.maxX * canvasWidth - 4, 0.82 * canvasHeight, 4, 0.18 * canvasHeight);
+        drawUnmirroredText(ctx, 'ПРОПАСТЬ — ДЕРЖИ МОСТ', (pit.minX + pit.maxX) / 2 * canvasWidth, 0.70 * canvasHeight, 'bold 16px sans-serif', '#f87171');
     }
 
     // Lever
@@ -413,7 +416,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, canvasWidth: number, ca
             ctx.fill();
         }
 
-        drawUnmirroredText(ctx, 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
+        drawUnmirroredText(ctx, pit ? 'МОСТ' : 'ЩИТ', px, py - ph/2 - 10, '16px sans-serif', 'white');
     }
 
     // Prism
@@ -791,6 +794,7 @@ export function evaluateRules() {
     const floor_y = 0.8;
     const pit = LEVELS[gameState.currentLevel - 1]?.pit;
     const overPit = pit && man.x > pit.minX && man.x < pit.maxX;
+    if (!overPit) pitFallY = null;
     if (overPit && (gameState.mode === 'PLAYING' || gameState.mode === 'RECORDING')) {
         const supported = plate && plate.grabbedBy && Math.abs(plate.x - man.x) < plate.width / 2 && plate.y >= 0.75 && plate.y <= 0.85;
         if (supported && plate) { pitFallY = null; man.y = plate.y - plate.height / 2 - 0.03; }

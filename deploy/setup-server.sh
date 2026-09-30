@@ -19,5 +19,5 @@ printf '%s\n' 'azureuser ALL=(root) NOPASSWD: /usr/bin/systemctl restart echo-ap
 sudo chmod 440 /etc/sudoers.d/echo
 sudo visudo -cf /etc/sudoers.d/echo
 if [ ! -f /srv/echo/api/.env ]; then
-    (umask 077; printf '%s\n' 'NODE_ENV=production' 'PUBLIC_ORIGIN=https://vencera.jeanark.dev' 'DB_PATH=/srv/echo/data/echo.db' 'PORT=3000' 'MAIL_FROM=ECHO <echo@jeanark.dev>' > /srv/echo/api/.env)
+    (umask 077; printf '%s\n' 'NODE_ENV=production' 'PUBLIC_ORIGIN=https://vencera.jeanark.dev' 'DB_PATH=/srv/echo/data/echo.db' 'PORT=3000' 'MAIL_FROM=ECHO <echo@vencera.jeanark.dev>' > /srv/echo/api/.env)
 fi
