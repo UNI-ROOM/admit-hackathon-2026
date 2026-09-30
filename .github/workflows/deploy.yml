@@ -1,7 +1,7 @@
 name: Test, build containers and deploy ECHO
 on:
   push:
-    branches: [main]
+    branches: [main, stage]
     paths-ignore: ['docs/**', '**.md']
   pull_request:
     paths-ignore: ['docs/**', '**.md']
@@ -16,6 +16,8 @@ concurrency:
   group: echo-${{ github.ref }}
   cancel-in-progress: false
 # Tests and image builds run in parallel; deploy waits for all of them.
+# main deploys to production (vencera.jeanark.dev), stage to
+# stage.vencera.jeanark.dev: same server, separate stack and database.
 # Each test job skips its steps when its part of the repo is unchanged
 # (manual runs always test everything).
 jobs:
@@ -115,10 +117,10 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: docker compose logs --tail 100
       - name: Package immutable images
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage')
         run: docker save "echo-web:$GITHUB_SHA" "echo-api:$GITHUB_SHA" | gzip -1 > images.tar.gz
       - uses: actions/upload-artifact@v4
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage')
         with:
           name: images-${{ github.sha }}
           path: images.tar.gz
@@ -126,10 +128,16 @@ jobs:
           compression-level: 0
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage')
     needs: [test-web, test-api, build]
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'stage' }}
+      url: ${{ github.ref_name == 'main' && 'https://vencera.jeanark.dev' || 'https://stage.vencera.jeanark.dev' }}
+    env:
+      TARGET_DIR: ${{ github.ref_name == 'main' && '/srv/echo/containers' || '/srv/echo-stage/containers' }}
+      PROJECT: ${{ github.ref_name == 'main' && 'echo' || 'echo-stage' }}
+      SITE: ${{ github.ref_name == 'main' && 'https://vencera.jeanark.dev' || 'https://stage.vencera.jeanark.dev' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -155,8 +163,8 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          rsync -az images.tar.gz "$SSH_USER@$SSH_HOST:/srv/echo/containers/images.tar.gz"
-          rsync -az docker-compose.yml "$SSH_USER@$SSH_HOST:/srv/echo/containers/compose.release.yml"
-          rsync -az deploy/release.sh "$SSH_USER@$SSH_HOST:/srv/echo/containers/release.sh"
-          ssh "$SSH_USER@$SSH_HOST" "bash /srv/echo/containers/release.sh '$GITHUB_SHA'"
-          curl -fsS --retry 5 --retry-delay 2 https://vencera.jeanark.dev/api/health
+          rsync -az images.tar.gz "$SSH_USER@$SSH_HOST:$TARGET_DIR/images.tar.gz"
+          rsync -az docker-compose.yml "$SSH_USER@$SSH_HOST:$TARGET_DIR/compose.release.yml"
+          rsync -az deploy/release.sh "$SSH_USER@$SSH_HOST:$TARGET_DIR/release.sh"
+          ssh "$SSH_USER@$SSH_HOST" "bash $TARGET_DIR/release.sh '$GITHUB_SHA' '$PROJECT'"
+          curl -fsS --retry 5 --retry-delay 2 "$SITE/api/health"
