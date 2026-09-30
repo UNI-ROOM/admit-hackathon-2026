@@ -87,7 +87,6 @@ export function openSettings(): void {
         row(t('settings.mirror'), toggle(() => getSettings().mirror, on => updateSettings({ mirror: on }))),
         row(t('settings.skeleton'), toggle(() => getSettings().showSkeleton, on => updateSettings({ showSkeleton: on }))),
         row(t('settings.hints'), toggle(() => getSettings().hints, on => updateSettings({ hints: on }))),
-        row(t('settings.unlockAll'), toggle(() => getSettings().unlockAll, on => updateSettings({ unlockAll: on }))),
     );
     buildLanguageSection(body, settings);
     buildResetSection(body);

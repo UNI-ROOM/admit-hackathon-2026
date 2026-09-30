@@ -7,7 +7,6 @@
 import { LEVELS, getLevelConfig } from '../levels';
 import type { Difficulty } from '../../../shared/score';
 import { api } from '../api';
-import { getSettings } from '../settings';
 import { gameState, resetLevel } from '../game';
 import { t } from '../i18n';
 import { show, onChange } from './router';
@@ -97,12 +96,12 @@ export function goToTutorial(): void {
 
 // --- Scene rendering ---
 
-let sessionInfo: { maxLevel: number; best: Record<string, number> } | null = null;
+let sessionInfo: { best: Record<string, number> } | null = null;
 
 async function loadSession(): Promise<void> {
     try {
         const s = await api.session();
-        sessionInfo = { maxLevel: s.progress.max_level, best: s.best };
+        sessionInfo = { best: s.best };
     } catch {
         sessionInfo = null;
     }
@@ -129,14 +128,11 @@ function render(): void {
     const grid = document.createElement('div');
     grid.className = 'levels-grid';
 
-    const maxLevel = getSettings().unlockAll ? LEVELS.length : (sessionInfo?.maxLevel ?? 1);
-
     LEVELS.forEach((_lvl, idx) => {
         const n = idx + 1;
-        const locked = n > maxLevel;
 
         const card = document.createElement('div');
-        card.className = 'level-card' + (locked ? ' locked' : '');
+        card.className = 'level-card';
 
         const num = document.createElement('div');
         num.className = 'level-card-num';
@@ -153,19 +149,12 @@ function render(): void {
 
         card.append(num, name, best);
 
-        if (locked) {
-            const lock = document.createElement('div');
-            lock.className = 'level-card-lock';
-            lock.textContent = '🔒';
-            card.append(lock);
-        } else {
-            for (const difficulty of ['easy', 'hard'] as const) {
-                const option = document.createElement('div');
-                option.className = 'difficulty-option';
-                const play = button(t(`levels.${difficulty}`), () => goToLevel(n, difficulty));
-                option.append(play);
-                card.append(option);
-            }
+        for (const difficulty of ['easy', 'hard'] as const) {
+            const option = document.createElement('div');
+            option.className = 'difficulty-option';
+            const play = button(t(`levels.${difficulty}`), () => goToLevel(n, difficulty));
+            option.append(play);
+            card.append(option);
         }
 
         grid.append(card);

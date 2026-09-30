@@ -1,4 +1,4 @@
-import { initializeAccount, showResult, closePanel, panelOpen } from './ui/account';
+import { initializeAccount, requireSignIn, showResult, closePanel, panelOpen } from './ui/account';
 import { handlePointer, setUiContext } from './ui/pointer';
 import './style.css';
 import { FixedStepClock } from './loop';
@@ -557,5 +557,6 @@ show('menu');
 void ensureCamera();
 void (async () => {
     await initializeAccount();
+    await requireSignIn();
     unlockAudioContext();
 })();

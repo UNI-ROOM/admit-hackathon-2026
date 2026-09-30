@@ -130,12 +130,10 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
 .levels-heading { font-family: var(--font-pixel); font-size: clamp(1.2rem, 3vw, 1.8rem); letter-spacing: 3px; color: var(--accent); margin: 0; }
 .levels-grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 260px)); gap: 24px; justify-content: center; }
 .level-card { background: #000; border: 1px solid var(--grid); border-radius: 4px; padding: 20px; text-align: center; position: relative; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.15s ease; }
-.level-card:not(.locked):hover { border-color: var(--accent); }
-.level-card.locked { opacity: 0.6; }
+.level-card:hover { border-color: var(--accent); }
 .level-card-num { font-family: var(--font-pixel); font-size: 1.2rem; color: var(--accent); text-align: left; }
 .level-card-name { font-weight: 700; font-size: 1.05rem; }
 .level-card-echoes, .level-card-best { font: 13px system-ui; color: var(--muted); }
-.level-card-lock { font-size: 1.6rem; }
 .levels-nav { display: flex; gap: 16px; }
 
 @media (max-width: 900px) {
@@ -192,7 +190,11 @@ body { margin: 0; background-color: var(--bg); color: var(--fg); overflow: hidde
     .scene::after { animation: none !important; }
 }
 
-.account-hud { position: fixed; top: 16px; right: 16px; z-index: 30; display: flex; flex-wrap: wrap; gap: 8px; max-width: min(480px, 95vw); padding: 10px; border-radius: 4px; background: rgba(0, 0, 0, 0.9); border: 1px solid var(--grid); color: var(--fg); pointer-events: auto; font: 14px system-ui; }
+/* Name on its own line, then one even row of buttons. */
+.account-hud { position: fixed; top: 16px; right: 16px; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: min(520px, 95vw); padding: 12px; border-radius: 4px; background: rgba(0, 0, 0, 0.9); border: 1px solid var(--grid); color: var(--fg); pointer-events: auto; font: 14px system-ui; }
+.account-hud > span { flex: 1 0 100%; line-height: 1.4; }
+.account-hud > span:first-child { font-weight: 600; }
+.account-hud > button { flex: 1 1 0; white-space: nowrap; }
 .account-hud span:nth-child(2) { color: var(--accent-2); }
 .account-hud button, .account-panel button, .settings-panel button { padding: 10px 14px; min-height: 44px; }
 .account-panel { z-index: 100; margin: auto; padding: 24px; width: min(540px, 94vw); max-height: 85vh; overflow: auto; background: #000; color: var(--fg); border: 1px solid var(--grid); border-radius: 4px; font: 16px system-ui; }
