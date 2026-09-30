@@ -20,7 +20,7 @@ const STORAGE_KEY = 'vencera.settings';
 const DEFAULT_SETTINGS: Settings = {
     sfx: true,
     music: true,
-    musicVolume: 0.1,
+    musicVolume: 0.01,
     mirror: true,
     showSkeleton: true,
     hints: true,
@@ -50,7 +50,7 @@ function loadSettings(): Settings {
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_SETTINGS };
         const loaded = { ...DEFAULT_SETTINGS, ...parsed };
-        if (typeof loaded.musicVolume !== 'number' || isNaN(loaded.musicVolume)) {
+        if (typeof loaded.musicVolume !== 'number' || isNaN(loaded.musicVolume) || loaded.musicVolume <= 0) {
             loaded.musicVolume = DEFAULT_SETTINGS.musicVolume;
         }
         return loaded;

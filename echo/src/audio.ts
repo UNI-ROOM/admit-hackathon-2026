@@ -20,7 +20,7 @@ export function unlockAudioContext(): void {
     if (ctx && ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
     }
-    if (musicEnabled && !musicPlaying) {
+    if (musicEnabled) {
         startMusic();
     }
 }
@@ -37,7 +37,7 @@ if (typeof window !== 'undefined') {
             events.forEach(evt => window.removeEventListener(evt, unlocker));
         }
     };
-    events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true }));
+    events.forEach(evt => window.addEventListener(evt, unlocker, { passive: true, capture: true }));
 
     // Attempt immediate playback on initial script load
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
@@ -64,11 +64,11 @@ export function setSfxEnabled(on: boolean): void {
 let musicEnabled = true;
 let musicPlaying = false;
 let musicAudio: HTMLAudioElement | null = null;
-let musicVolume = 0.1;
+let musicVolume = 0.01;
 
 export function setMusicVolume(volume: number): void {
     if (typeof volume !== 'number' || isNaN(volume)) {
-        volume = 0.1;
+        volume = 0.01;
     }
     musicVolume = Math.max(0.0, Math.min(1.0, volume));
     if (musicAudio) {
@@ -88,6 +88,8 @@ function getMusicAudio(): HTMLAudioElement | null {
     return musicAudio;
 }
 
+let playPromise: Promise<void> | null = null;
+
 export function startMusic(): void {
     if (musicPlaying || !musicEnabled) return;
     const audio = getMusicAudio();
@@ -98,9 +100,14 @@ export function startMusic(): void {
         ctx.resume().catch(() => {});
     }
 
-    audio.play().then(() => {
+    if (playPromise) return;
+
+    playPromise = audio.play();
+    playPromise.then(() => {
         musicPlaying = true;
+        playPromise = null;
     }).catch((err) => {
+        playPromise = null;
         console.warn('Background music playback blocked or failed:', err);
     });
 }
